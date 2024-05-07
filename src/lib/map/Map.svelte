@@ -38,6 +38,46 @@
 		}
 	}).filter((c) => c);
 
+	const controllerGroups = nonCenterControllerCenters.reduce((clusters, current) => {
+		// Extract the prefix from the callsign up to the first underscore
+		const currentPrefix = current.controller.callsign.split('_')[0];
+
+		// Find a cluster that has a matching prefix
+		const foundCluster = clusters.find(cluster =>
+			cluster.some(member => {
+				const memberPrefix = member.controller.callsign.split('_')[0];
+				return memberPrefix === currentPrefix;
+			})
+		);
+
+		if (foundCluster) {
+			foundCluster.push(current);
+		} else {
+			clusters.push([current]);
+		}
+		return clusters;
+	}, []).map(cluster => {
+		// Determine the best center point based on facility type priority
+		const preferredCenters = cluster.filter(c => [2, 3, 4].includes(c.controller.facility)); // DEL, GND, TWR
+		const appCenters = cluster.filter(c => c.controller.facility === 5); // APP
+
+		let bestCenter;
+		if (preferredCenters.length > 0) {
+			bestCenter = turf.center(turf.featureCollection(preferredCenters.map(c => turf.point(c.center.coordinates)))).geometry;
+		} else if (appCenters.length > 0) {
+			bestCenter = turf.center(turf.featureCollection(appCenters.map(c => turf.point(c.center.coordinates)))).geometry;
+		} else {
+			bestCenter = turf.center(turf.featureCollection(cluster.map(c => turf.point(c.center.coordinates)))).geometry;
+		}
+
+		return {
+			controllers: cluster.map(c => c.controller),
+			center: bestCenter
+		};
+	});
+
+	console.log(JSON.stringify(controllerGroups.map(cg => cg.controllers.map(c => c.callsign))));
+
 	selectedPilot.subscribe((value) => {
 		updateMap();
 	});
@@ -121,13 +161,17 @@
 						});
 
 						layer.bindPopup(`
-    <div class="flex flex-col justify-center items-center text-xs">
-        <h1 class="font-semibold text-purple-400 w-full font-mono">${controller.callsign}</h1>
-				<div class="mt-1 text-purple-100 w-full font-mono">${controller.name}</div>
-        <div class="mt-1 text-purple-100 w-full font-mono">${controller.frequency}</div>
-        <div class="mt-1 text-purple-100 w-full font-mono">
-            ${(controller.text_atis) ? controller.text_atis.join(' ') : ''}
+			    <div class="text-xs p-2 bg-zinc-900 bg-opacity-50 border border-purple-300">
+         <div class="flex flex-col space-y-1 py-1 min-w-48 max-w-64">
+
+    <div class="flex items-center space-x-2">
+            <div class="text-xs w-1/3 font-semibold text-purple-400">${controller.callsign}</div>
+            <div class="text-xs w-2/3 text-purple-100 text-right">${controller.frequency}</div>
         </div>
+
+<div class="w-full text-xs text-purple-100">${controller.name}</div>
+        ${controller.text_atis ? `<div class="w-full text-xs text-purple-100">${controller.text_atis.join(' ')}</div>` : ''}
+    </div>
     </div>
 `)
 							.on('mouseover', function() {
@@ -162,37 +206,48 @@
 			map.removeLayer(controllerLayer);
 		}
 
-		controllerLayer = nonCenterControllerCenters.map((c) => {
-			// We have to reverse the coordinates because they're in lon/lat and leaflet expects lat/lon
-				const marker = leaflet
-					.marker([c.center.coordinates[1], c.center.coordinates[0]], {
-						icon: leaflet.divIcon({
-							html: `<div class="hover:pointer rounded-full w-2 h-2" style="background-color: ${getFacilityColor(c.controller.facility)}"></div>`,
-							iconSize: [10, 10],
-							iconAnchor: [5, 5],
-							className: ''
-						}),
-						interactive: true,
-						opacity: 1
-					}).bindPopup(`
-    <div class="flex flex-col justify-center items-center text-xs">
-        <h1 class="font-semibold text-purple-400 w-full font-mono">${c.controller.callsign}</h1>
-				<div class="mt-1 text-purple-100 w-full font-mono">${c.controller.name}</div>
-        <div class="mt-1 text-purple-100 w-full font-mono">${c.controller.frequency}</div>
-        <div class="mt-1 text-purple-100 w-full font-mono">
-            ${(c.controller.text_atis) ? c.controller.text_atis.join(' ') : ''}
+		controllerLayer = controllerGroups.flatMap(group => {
+			// Create a div to hold all markers in the group, using flexbox for horizontal layout
+			const groupHtml = group.controllers.sort((a, b) => a.facility - b.facility).map(controller => `
+        <div class="hover:pointer w-3 h-3 flex items-center justify-center text-[.65rem] font-bold rounded-none"
+            style="background-color: ${getFacilityColor(controller.facility).bgColor}; color:${getFacilityColor(controller.facility).textColor}">
+            ${getFacilityLetter(controller.facility)}
         </div>
-    </div>
-`)
-					.on('mouseover', function() {
-						marker.openPopup();
-					})
-					.on('mouseout', function() {
-						marker.closePopup();
-					})
-					.addTo(map);
+    `).join('');
 
-				return marker;
+			const popupContent = group.controllers.map(controller => `
+    <div class="flex flex-col space-y-1 py-1 min-w-48 max-w-64">
+
+    <div class="flex items-center space-x-2">
+            <div class="text-xs w-1/3 font-semibold" style="color: ${getFacilityColor(controller.facility).bgColor}">${controller.callsign}</div>
+            <div class="text-xs w-2/3 text-purple-100 text-right">${controller.frequency}</div>
+        </div>
+
+<div class="w-full text-xs text-purple-100">${controller.name}</div>
+        ${controller.text_atis ? `<div class="w-full text-xs text-purple-100">${controller.text_atis.join(' ')}</div>` : ''}
+    </div>
+`).join('');
+
+			// Create a single marker for the whole group, positioned at the group's central coordinate
+			const marker = leaflet.marker([group.center.coordinates[1], group.center.coordinates[0]], {
+				icon: leaflet.divIcon({
+					html: `<div class="flex">${groupHtml}</div>`, // Use Tailwind's flex and negative margin for overlap adjustment
+					className: '', // Ensure no extra padding or margins are applied from default Leaflet classes
+					iconSize: [null, null] // Disable automatic sizing to allow CSS control
+				}),
+				interactive: true,
+				opacity: 1
+			}).bindPopup(`
+			    <div class="text-xs p-2 bg-zinc-900 bg-opacity-50 border border-purple-300">
+        ${popupContent}
+    </div>
+			`).on('mouseover', function() {
+				marker.openPopup();
+			}).on('mouseout', function() {
+				marker.closePopup();
+			}).addTo(map);
+
+			return marker;
 		});
 	}
 
@@ -251,23 +306,55 @@
 	}
 
 	function getFacilityColor(facility) {
+		let bgColor, textColor;
+		switch (facility) {
+			case 1: // Flight Service Station
+				bgColor = '#2563EB'; // HEX for Tailwind bg-blue-600
+				textColor = '#E0F2FE'; // Lighter blue for text
+				break;
+			case 2: // Clearance Delivery
+				bgColor = '#047857'; // HEX for Tailwind bg-green-700
+				textColor = '#D1FAE5'; // Lighter green for text
+				break;
+			case 3: // Ground
+				bgColor = '#C084FC'; // HEX for Tailwind bg-purple-400
+				textColor = '#FAF5FF'; // Lighter purple for text
+				break;
+			case 4: // Tower
+				bgColor = '#F97316'; // HEX for Tailwind bg-orange-500
+				textColor = '#FFEDD5'; // Lighter orange for text
+				break;
+			case 5: // Approach/Departure
+				bgColor = '#DDD6FE'; // HEX for Tailwind bg-purple-200
+				textColor = '#6D28D9'; // Darker purple for text
+				break;
+			default:
+				bgColor = '#1F2937'; // HEX for Tailwind bg-gray-800 (Default)
+				textColor = '#E2E8F0'; // Light gray for text (Default)
+				break;
+		}
+		return { bgColor, textColor };
+	}
+
+
+	function getFacilityLetter(facility) {
 		switch (facility) {
 			case 0:
-				return '#4B5563'; // Observer - Gray (Cool Gray 700 from Tailwind)
+				return 'O'; // Observer
 			case 1:
-				return '#2563EB'; // Flight Service Station - Blue (Blue 600 from Tailwind)
+				return 'F'; // Flight Service Station
 			case 2:
-				return '#047857'; // Clearance Delivery - Green (Green 700 from Tailwind)
+				return 'C'; // Clearance Delivery
 			case 3:
-				return '#C084FC'; // Ground - Purple (Purple 400 from Tailwind)
+				return 'G'; // Ground
 			case 4:
-				return '#F97316'; // Tower - Orange (Orange 500 from Tailwind)
+				return 'T'; // Tower
 			case 5:
-				return '#DDD6FE'; // Approach/Departure - Light Purple (Purple 200 from Tailwind)
+				return 'A'; // Approach/Departure
 			case 6:
-				return '#6D28D9'; // Enroute - Dark Purple (Purple 800 from Tailwind)
+				return 'E'; // Enroute
 			default:
-				return '#000000'; // Default color if no match found - Black
+				return 'X'; // Default letter if no match found
 		}
 	}
 </script>
