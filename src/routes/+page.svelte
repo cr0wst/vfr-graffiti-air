@@ -6,7 +6,7 @@
 </script>
 
 <div class="z-0 flex-1 flex w-full" id="content">
-	<Map boundaries="{data.boundaries}" pilots="{data.pilots}" controllers="{[]}" />
+	<Map boundaries="{data.boundaries}" pilots="{data.pilots}" controllers="{data.controllers}" />
 </div>
 <style lang="postcss">
 

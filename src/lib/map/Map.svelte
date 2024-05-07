@@ -16,6 +16,7 @@
 	let pilotLayer: any;
 	let geoJsonLayer: any;
 	let geoLabels: any[] = [];
+	let controllerLayer: any;
 
 	selectedPilot.subscribe((value) => {
 		updateMap();
@@ -56,6 +57,7 @@
 		if (leaflet && map) {
 			updateGeoJsonLayer();
 			updatePilotLayer();
+			updateControllerLayer();
 		}
 	}
 
@@ -76,11 +78,6 @@
 					const color = '#555555';
 
 					const weight = .5;
-
-					// If there's a plane selected we set the opacity to the departure and arrival artcc to .8 and all others to .2
-					// if there's no plane selected but a territory is selected, we also set it to .8 and all others to .2
-					// otherwise .6
-					const fillOpacity = 0.1;
 					return {
 						fillColor: color,
 						// set the weight to 3 if the plane is selected and this is a departure or arrival artcc
@@ -91,33 +88,48 @@
 						fillOpacity: 0
 					};
 				},
-				onEachFeature: (feature, layer) => {
-					// Loop through each transceiver and check if it's in the polygon
-					controllers.filter(c => c.facility === 6).forEach((controller) => {
-						let found = false;
-						const t = controller.transceivers[0].transceivers.forEach((t) => {
-							if (isTransceiverInPolygon(t, feature.geometry) && !found) {
-								found = true;
-								layer.setStyle({
-									fillOpacity: .5,
-									opacity: 1
-								});
-								const center = [feature.properties.label_lat, feature.properties.label_lon];
-								const marker = leaflet.marker(center, {
-									icon: L.divIcon({
-										iconSize: null,
-										className: 'label',
-										html: '<div>' + feature.properties.id + '</div>'
-									})
-								}).addTo(map);
-
-								geoLabels.push(marker);
-							}
-						});
-					});
-				}
 			})
 			.addTo(map);
+	}
+
+	function updateControllerLayer() {
+		if (controllerLayer) {
+			map.removeLayer(controllerLayer);
+		}
+
+		controllerLayer = controllers.map((c) => {
+			return (c.transceivers || []).map((t) => {
+				const marker = leaflet
+					.marker([t.latDeg, t.lonDeg], {
+						icon: leaflet.divIcon({
+							html: `<div class="hover:pointer rounded-full w-2 h-2 bg-orange-300"></div>`,
+							iconSize: [10, 10],
+							iconAnchor: [5, 5],
+							className: ''
+						}),
+						interactive: true,
+						opacity: 1
+					}).bindPopup(`
+    <div class="flex flex-col justify-center items-center text-xs">
+        <h1 class="font-semibold text-purple-400 w-full font-mono">${c.callsign}</h1>
+				<div class="mt-1 text-purple-100 w-full font-mono">${c.name}</div>
+        <div class="mt-1 text-purple-100 w-full font-mono">${(t.frequency / 1000000).toFixed(3)}</div>
+        <div class="mt-1 text-purple-100 w-full font-mono">
+            ${(c.text_atis) ? c.text_atis.join(' ') : ''}
+        </div>
+    </div>
+`)
+					.on('mouseover', function() {
+						marker.openPopup();
+					})
+					.on('mouseout', function() {
+						marker.closePopup();
+					})
+					.addTo(map);
+
+				return marker;
+			});
+		});
 	}
 
 	function updatePilotLayer() {
@@ -133,7 +145,7 @@
 				.marker([f.latitude, f.longitude], {
 					icon: leaflet.divIcon({
 						html: `<div class="plane-icon hover:pointer" style="--fill-color: ${color}">${PlaneIcon}</div>`,
-						iconSize: [10, 10],
+						iconSize: [14, 14],
 						iconAnchor: [5, 5],
 						className: ''
 					}),
@@ -172,11 +184,6 @@
 	function convertAltitudeToFlightLevel(altitude: number) {
 		// pad with 0s and make 3 digits 4500 should be 045 40000 should be 40000
 		return Math.round(altitude / 100).toString().padStart(3, '0');
-	}
-
-	function isTransceiverInPolygon(transceiver, polygon) {
-		const point = turf.point([transceiver.lonDeg, transceiver.latDeg]);
-		return turf.booleanPointInPolygon(point, polygon);
 	}
 </script>
 

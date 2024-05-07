@@ -25,6 +25,46 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 					foreignField: 'callsign',
 					as: 'transceivers'
 				}
+			},
+			{
+				$unwind: {
+					path: '$transceivers',
+					preserveNullAndEmptyArrays: true // keeps the controller documents without transceivers
+				}
+			},
+			{
+				$addFields: {
+					// Promote transceiver details to the parent document
+					transceivers: '$transceivers.transceivers'
+				}
+			},
+			{
+				$addFields: {
+					transceivers: {
+						$map: {
+							input: '$transceivers',
+							as: 'transceiver',
+							in: {
+								frequency: '$$transceiver.frequency',
+								latDeg: '$$transceiver.latDeg',
+								lonDeg: '$$transceiver.lonDeg'
+							}
+						}
+					}
+				}
+			},
+			{
+				$addFields: {
+					transceivers: {
+						$reduce: {
+							input: '$transceivers',
+							initialValue: [],
+							in: {
+								$setUnion: ['$$value', ['$$this']]
+							}
+						}
+					}
+				}
 			}
 		])
 		.toArray();
