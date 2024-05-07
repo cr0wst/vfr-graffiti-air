@@ -17,6 +17,14 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 					foreignField: 'id',
 					as: 'facility_details'
 				}
+			},
+			{
+				$lookup: {
+					from: 'transceivers',
+					localField: 'callsign',
+					foreignField: 'callsign',
+					as: 'transceivers'
+				}
 			}
 		])
 		.toArray();

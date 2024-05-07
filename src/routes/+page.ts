@@ -5,7 +5,8 @@ export const load: PageLoad = async ({ fetch, depends }: PageLoadEvent) => {
 
 	return {
 		boundaries: await fetchBoundaries(fetch),
-		pilots: await fetchPilots(fetch)
+		pilots: await fetchPilots(fetch),
+		controllers: await fetchControllers(fetch)
 	};
 };
 
@@ -19,4 +20,8 @@ async function fetchBoundaries(fetch: typeof window.fetch) {
 
 async function fetchPilots(fetch: typeof window.fetch) {
 	return fetch('/api/pilots').then((r) => r.json());
+}
+
+async function fetchControllers(fetch: typeof window.fetch) {
+	return fetch('/api/controllers').then((r) => r.json());
 }

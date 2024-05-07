@@ -3,16 +3,23 @@
 	import { onDestroy, onMount } from 'svelte';
 	import PlaneIcon from '$lib/map/plane.svg?raw';
 	import { browser } from '$app/environment';
+	import { selectedPilot } from '$lib/stores';
+	import * as turf from '@turf/turf';
 
 	export let boundaries: any;
 	export let pilots: any[] = [];
+	export let controllers: any[] = [];
 
 	let mapElement: any;
 	let map: any;
 	let leaflet: any;
 	let pilotLayer: any;
 	let geoJsonLayer: any;
-	let labelLayer: any;
+	let geoLabels: any[] = [];
+
+	selectedPilot.subscribe((value) => {
+		updateMap();
+	});
 
 	onMount(async () => {
 		if (browser) {
@@ -57,8 +64,10 @@
 			map.removeLayer(geoJsonLayer);
 		}
 
-		if (labelLayer) {
-			map.removeLayer(labelLayer);
+		if (geoLabels) {
+			for (let i = 0; i < geoLabels.length; i++) {
+				map.removeLayer(geoLabels[i]);
+			}
 		}
 
 		geoJsonLayer = leaflet
@@ -76,21 +85,36 @@
 						fillColor: color,
 						// set the weight to 3 if the plane is selected and this is a departure or arrival artcc
 						weight: weight,
-						opacity: 1,
+						opacity: 0,
 						color: 'white',
 						// set fill opacity to .2 if there's a plane selected
-						fillOpacity: fillOpacity
+						fillOpacity: 0
 					};
 				},
 				onEachFeature: (feature, layer) => {
-					const center = [feature.properties.label_lat, feature.properties.label_lon]
-					leaflet.marker(center, {
-						icon: L.divIcon({
-							iconSize: null,
-							className: "label",
-							html: "<div>" + feature.properties.id + "</div>"
-						})
-					}).addTo(map);
+					// Loop through each transceiver and check if it's in the polygon
+					controllers.filter(c => c.facility === 6).forEach((controller) => {
+						let found = false;
+						const t = controller.transceivers[0].transceivers.forEach((t) => {
+							if (isTransceiverInPolygon(t, feature.geometry) && !found) {
+								found = true;
+								layer.setStyle({
+									fillOpacity: .5,
+									opacity: 1
+								});
+								const center = [feature.properties.label_lat, feature.properties.label_lon];
+								const marker = leaflet.marker(center, {
+									icon: L.divIcon({
+										iconSize: null,
+										className: 'label',
+										html: '<div>' + feature.properties.id + '</div>'
+									})
+								}).addTo(map);
+
+								geoLabels.push(marker);
+							}
+						});
+					});
 				}
 			})
 			.addTo(map);
@@ -102,13 +126,13 @@
 		}
 
 		pilotLayer = pilots.map((f) => {
-			const color = '#805694' // dark purple
+			const color = '#a96aad';
 
 			// add some transparency if the plane is not selected
 			const marker = leaflet
 				.marker([f.latitude, f.longitude], {
 					icon: leaflet.divIcon({
-						html: `<div class="plane-icon" style="--fill-color: ${color}">${PlaneIcon}</div>`,
+						html: `<div class="plane-icon hover:pointer" style="--fill-color: ${color}">${PlaneIcon}</div>`,
 						iconSize: [10, 10],
 						iconAnchor: [5, 5],
 						className: ''
@@ -117,11 +141,42 @@
 					rotationOrigin: 'center',
 					interactive: true,
 					opacity: 1
+				}).bindPopup(`
+    <div class="flex flex-col justify-center items-center text-xs">
+        <h1 class="font-semibold text-purple-400 w-full font-mono">${f.callsign}</h1>
+        <div class="mt-1 text-purple-100 w-full font-mono">FL${convertAltitudeToFlightLevel(f.altitude)} ${f.groundspeed}kts</div>
+        <div class="mt-1 text-purple-100 w-full font-mono">
+            ${
+					f.flight_plan && f.flight_plan.departure && f.flight_plan.arrival
+						? `${f.flight_plan.departure} - ${f.flight_plan.arrival}`
+						: 'No FP'
+				}
+        </div>
+    </div>
+`)
+				.on('click', () => {
+					$selectedPilot = f;
+				})
+				.on('mouseover', function() {
+					marker.openPopup();
+				})
+				.on('mouseout', function() {
+					marker.closePopup();
 				})
 				.addTo(map);
 
 			return marker;
 		});
+	}
+
+	function convertAltitudeToFlightLevel(altitude: number) {
+		// pad with 0s and make 3 digits 4500 should be 045 40000 should be 40000
+		return Math.round(altitude / 100).toString().padStart(3, '0');
+	}
+
+	function isTransceiverInPolygon(transceiver, polygon) {
+		const point = turf.point([transceiver.lonDeg, transceiver.latDeg]);
+		return turf.booleanPointInPolygon(point, polygon);
 	}
 </script>
 
@@ -141,11 +196,22 @@
         filter: brightness(2);
     }
 
-		:global(.label) {
-			padding: 5px;
-			font-size: 12px;
-			font-weight: bold;
-			color: white;
-			opacity: 0.5;
-		}
+    :global(.label) {
+        padding: 5px;
+        font-size: 12px;
+        font-weight: bold;
+        color: white;
+        opacity: 0.5;
+    }
+
+    :global(.leaflet-popup-content-wrapper) {
+        padding: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: transparent !important;
+    }
+
+    :global(.leaflet-popup-tip-container, .leaflet-popup-close-button) {
+        display: none !important;
+    }
 </style>
