@@ -10,5 +10,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const response = await resolve(event);
 
+	await mongoClient.close();
+
 	return response;
 };
