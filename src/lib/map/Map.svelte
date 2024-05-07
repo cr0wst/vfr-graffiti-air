@@ -18,6 +18,26 @@
 	let geoLabels: any[] = [];
 	let controllerLayer: any;
 
+	let centerControllerCenters = controllers.filter((c) => c.facility == 6).map((c) => {
+		const transceivers = (c.transceivers || []).map((t) => {
+			return turf.point([t.lonDeg, t.latDeg]);
+		});
+		// Find the centroid of the transceivers turf points
+		if (transceivers.length !== 0) {
+			return { callsign: c.callsign, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
+		}
+	}).filter((c) => c);
+
+	let nonCenterControllerCenters = controllers.filter((c) => c.facility !== 6).map((c) => {
+		const transceivers = (c.transceivers || []).map((t) => {
+			return turf.point([t.lonDeg, t.latDeg]);
+		});
+		// Find the centroid of the transceivers turf points
+		if (transceivers.length !== 0) {
+			return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
+		}
+	}).filter((c) => c);
+
 	selectedPilot.subscribe((value) => {
 		updateMap();
 	});
@@ -55,9 +75,9 @@
 
 	function updateMap() {
 		if (leaflet && map) {
+			updateControllerLayer();
 			updateGeoJsonLayer();
 			updatePilotLayer();
-			updateControllerLayer();
 		}
 	}
 
@@ -88,6 +108,51 @@
 						fillOpacity: 0
 					};
 				},
+				onEachFeature: (feature, layer) => {
+					// Determine if a controller is in this boundary
+					const controllerInBoundary = centerControllerCenters.find((c) => {
+								return turf.booleanPointInPolygon(c.center, feature) === true;
+					});
+					if (controllerInBoundary) {
+						const controller = controllers.find((c) => c.callsign == controllerInBoundary.callsign);
+						layer.setStyle({
+							fillOpacity: 0.2,
+							opacity: 1
+						});
+
+						layer.bindPopup(`
+    <div class="flex flex-col justify-center items-center text-xs">
+        <h1 class="font-semibold text-purple-400 w-full font-mono">${controller.callsign}</h1>
+				<div class="mt-1 text-purple-100 w-full font-mono">${controller.name}</div>
+        <div class="mt-1 text-purple-100 w-full font-mono">${controller.frequency}</div>
+        <div class="mt-1 text-purple-100 w-full font-mono">
+            ${(controller.text_atis) ? controller.text_atis.join(' ') : ''}
+        </div>
+    </div>
+`)
+							.on('mouseover', function() {
+								layer.openPopup();
+							})
+							.on('mouseout', function() {
+								layer.closePopup();
+							})
+
+						const label = leaflet
+							.marker(layer.getBounds().getCenter(), {
+								icon: leaflet.divIcon({
+									html: `<div class="label">${feature.properties.id}</div>`,
+									iconSize: [100, 40],
+									iconAnchor: [50, 20],
+									className: ''
+								}),
+								interactive: false,
+								opacity: 1
+							})
+							.addTo(map);
+
+						geoLabels.push(label);
+					}
+				}
 			})
 			.addTo(map);
 	}
@@ -97,12 +162,12 @@
 			map.removeLayer(controllerLayer);
 		}
 
-		controllerLayer = controllers.map((c) => {
-			return (c.transceivers || []).map((t) => {
+		controllerLayer = nonCenterControllerCenters.map((c) => {
+			// We have to reverse the coordinates because they're in lon/lat and leaflet expects lat/lon
 				const marker = leaflet
-					.marker([t.latDeg, t.lonDeg], {
+					.marker([c.center.coordinates[1], c.center.coordinates[0]], {
 						icon: leaflet.divIcon({
-							html: `<div class="hover:pointer rounded-full w-2 h-2 bg-orange-300"></div>`,
+							html: `<div class="hover:pointer rounded-full w-2 h-2" style="background-color: ${getFacilityColor(c.controller.facility)}"></div>`,
 							iconSize: [10, 10],
 							iconAnchor: [5, 5],
 							className: ''
@@ -111,11 +176,11 @@
 						opacity: 1
 					}).bindPopup(`
     <div class="flex flex-col justify-center items-center text-xs">
-        <h1 class="font-semibold text-purple-400 w-full font-mono">${c.callsign}</h1>
-				<div class="mt-1 text-purple-100 w-full font-mono">${c.name}</div>
-        <div class="mt-1 text-purple-100 w-full font-mono">${(t.frequency / 1000000).toFixed(3)}</div>
+        <h1 class="font-semibold text-purple-400 w-full font-mono">${c.controller.callsign}</h1>
+				<div class="mt-1 text-purple-100 w-full font-mono">${c.controller.name}</div>
+        <div class="mt-1 text-purple-100 w-full font-mono">${c.controller.frequency}</div>
         <div class="mt-1 text-purple-100 w-full font-mono">
-            ${(c.text_atis) ? c.text_atis.join(' ') : ''}
+            ${(c.controller.text_atis) ? c.controller.text_atis.join(' ') : ''}
         </div>
     </div>
 `)
@@ -128,7 +193,6 @@
 					.addTo(map);
 
 				return marker;
-			});
 		});
 	}
 
@@ -184,6 +248,27 @@
 	function convertAltitudeToFlightLevel(altitude: number) {
 		// pad with 0s and make 3 digits 4500 should be 045 40000 should be 40000
 		return Math.round(altitude / 100).toString().padStart(3, '0');
+	}
+
+	function getFacilityColor(facility) {
+		switch (facility) {
+			case 0:
+				return '#4B5563'; // Observer - Gray (Cool Gray 700 from Tailwind)
+			case 1:
+				return '#2563EB'; // Flight Service Station - Blue (Blue 600 from Tailwind)
+			case 2:
+				return '#047857'; // Clearance Delivery - Green (Green 700 from Tailwind)
+			case 3:
+				return '#C084FC'; // Ground - Purple (Purple 400 from Tailwind)
+			case 4:
+				return '#F97316'; // Tower - Orange (Orange 500 from Tailwind)
+			case 5:
+				return '#DDD6FE'; // Approach/Departure - Light Purple (Purple 200 from Tailwind)
+			case 6:
+				return '#6D28D9'; // Enroute - Dark Purple (Purple 800 from Tailwind)
+			default:
+				return '#000000'; // Default color if no match found - Black
+		}
 	}
 </script>
 
