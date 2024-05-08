@@ -14,8 +14,72 @@
 		updateMap();
 	}
 
+	let centerControllerCenters = [];
+
+	let nonCenterControllerCenters = [];
+
+	let controllerGroups = [];
+
 	$: if (controllers) {
 		updateMap();
+
+		centerControllerCenters = controllers.filter((c) => c.facility == 6).map((c) => {
+			const transceivers = (c.transceivers || []).map((t) => {
+				return turf.point([t.lonDeg, t.latDeg]);
+			});
+			// Find the centroid of the transceivers turf points
+			if (transceivers.length !== 0) {
+				return { callsign: c.callsign, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
+			}
+		}).filter((c) => c);
+
+		nonCenterControllerCenters = controllers.filter((c) => c.facility !== 6).map((c) => {
+			const transceivers = (c.transceivers || []).map((t) => {
+				return turf.point([t.lonDeg, t.latDeg]);
+			});
+			// Find the centroid of the transceivers turf points
+			if (transceivers.length !== 0) {
+				return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
+			}
+		}).filter((c) => c);
+
+		controllerGroups = nonCenterControllerCenters.reduce((clusters, current) => {
+			// Extract the prefix from the callsign up to the first underscore
+			const currentPrefix = current.controller.callsign.split('_')[0];
+
+			// Find a cluster that has a matching prefix
+			const foundCluster = clusters.find(cluster =>
+				cluster.some(member => {
+					const memberPrefix = member.controller.callsign.split('_')[0];
+					return memberPrefix === currentPrefix;
+				})
+			);
+
+			if (foundCluster) {
+				foundCluster.push(current);
+			} else {
+				clusters.push([current]);
+			}
+			return clusters;
+		}, []).map(cluster => {
+			// Determine the best center point based on facility type priority
+			const preferredCenters = cluster.filter(c => [2, 3, 4].includes(c.controller.facility)); // DEL, GND, TWR
+			const appCenters = cluster.filter(c => c.controller.facility === 5); // APP
+
+			let bestCenter;
+			if (preferredCenters.length > 0) {
+				bestCenter = turf.center(turf.featureCollection(preferredCenters.map(c => turf.point(c.center.coordinates)))).geometry;
+			} else if (appCenters.length > 0) {
+				bestCenter = turf.center(turf.featureCollection(appCenters.map(c => turf.point(c.center.coordinates)))).geometry;
+			} else {
+				bestCenter = turf.center(turf.featureCollection(cluster.map(c => turf.point(c.center.coordinates)))).geometry;
+			}
+
+			return {
+				controllers: cluster.map(c => c.controller),
+				center: bestCenter
+			};
+		});
 	}
 
 	let mapElement: any;
@@ -25,64 +89,6 @@
 	let geoJsonLayer: any;
 	let geoLabels: any[] = [];
 	let controllerLayer: any;
-
-	let centerControllerCenters = controllers.filter((c) => c.facility == 6).map((c) => {
-		const transceivers = (c.transceivers || []).map((t) => {
-			return turf.point([t.lonDeg, t.latDeg]);
-		});
-		// Find the centroid of the transceivers turf points
-		if (transceivers.length !== 0) {
-			return { callsign: c.callsign, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
-		}
-	}).filter((c) => c);
-
-	let nonCenterControllerCenters = controllers.filter((c) => c.facility !== 6).map((c) => {
-		const transceivers = (c.transceivers || []).map((t) => {
-			return turf.point([t.lonDeg, t.latDeg]);
-		});
-		// Find the centroid of the transceivers turf points
-		if (transceivers.length !== 0) {
-			return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
-		}
-	}).filter((c) => c);
-
-	const controllerGroups = nonCenterControllerCenters.reduce((clusters, current) => {
-		// Extract the prefix from the callsign up to the first underscore
-		const currentPrefix = current.controller.callsign.split('_')[0];
-
-		// Find a cluster that has a matching prefix
-		const foundCluster = clusters.find(cluster =>
-			cluster.some(member => {
-				const memberPrefix = member.controller.callsign.split('_')[0];
-				return memberPrefix === currentPrefix;
-			})
-		);
-
-		if (foundCluster) {
-			foundCluster.push(current);
-		} else {
-			clusters.push([current]);
-		}
-		return clusters;
-	}, []).map(cluster => {
-		// Determine the best center point based on facility type priority
-		const preferredCenters = cluster.filter(c => [2, 3, 4].includes(c.controller.facility)); // DEL, GND, TWR
-		const appCenters = cluster.filter(c => c.controller.facility === 5); // APP
-
-		let bestCenter;
-		if (preferredCenters.length > 0) {
-			bestCenter = turf.center(turf.featureCollection(preferredCenters.map(c => turf.point(c.center.coordinates)))).geometry;
-		} else if (appCenters.length > 0) {
-			bestCenter = turf.center(turf.featureCollection(appCenters.map(c => turf.point(c.center.coordinates)))).geometry;
-		} else {
-			bestCenter = turf.center(turf.featureCollection(cluster.map(c => turf.point(c.center.coordinates)))).geometry;
-		}
-
-		return {
-			controllers: cluster.map(c => c.controller),
-			center: bestCenter
-		};
-	});
 
 	selectedPilot.subscribe((value) => {
 		updateMap();
@@ -94,20 +100,27 @@
 			await import('leaflet-rotatedmarker');
 
 			map = leaflet.map(mapElement, {
-				center: [37.8, -96],
-				zoom: 4,
+				center: [0, 0],
+				zoom: 3,
 				zoomControl: false
 			});
 
 			leaflet
 				.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.{ext}', {
-					minZoom: 0,
+					noWrap: true,
+					minZoom: 3,
 					maxZoom: 20,
 					attribution:
 						'&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 					ext: 'png'
 				})
 				.addTo(map);
+
+			var southWest = leaflet.latLng(-85.05112878, -180),
+				northEast = leaflet.latLng(85.05112878, 180),
+				bounds = leaflet.latLngBounds(southWest, northEast);
+
+			map.setMaxBounds(bounds);
 
 			updateMap();
 		}
@@ -179,7 +192,7 @@
         ${controller.text_atis ? `<div class="w-full text-xs text-purple-100">${controller.text_atis.join(' ')}</div>` : ''}
     </div>
     </div>
-`)
+`, { autoPan: false })
 							.on('mouseover', function() {
 								layer.openPopup();
 							})
@@ -247,7 +260,7 @@
 			    <div class="text-xs p-2 bg-zinc-900 bg-opacity-50 border border-purple-300">
         ${popupContent}
     </div>
-			`).on('mouseover', function() {
+			`,{ autoPan: false }).on('mouseover', function() {
 				marker.openPopup();
 			}).on('mouseout', function() {
 				marker.closePopup();
@@ -278,19 +291,34 @@
 					rotationOrigin: 'center',
 					interactive: true,
 					opacity: 1
-				}).bindPopup(`
-    <div class="flex flex-col justify-center items-center text-xs">
-        <h1 class="font-semibold text-purple-400 w-full font-mono">${f.callsign}</h1>
-        <div class="mt-1 text-purple-100 w-full font-mono">FL${convertAltitudeToFlightLevel(f.altitude)} ${f.groundspeed}kts</div>
-        <div class="mt-1 text-purple-100 w-full font-mono">
-            ${
-					f.flight_plan && f.flight_plan.departure && f.flight_plan.arrival
-						? `${f.flight_plan.departure} - ${f.flight_plan.arrival}`
-						: 'No FP'
-				}
+				}).bindPopup(`<div class="text-xs p-2 bg-zinc-900 bg-opacity-50 border border-purple-300">
+    <div class="flex flex-col space-y-1 py-1 min-w-48 max-w-64">
+
+        <!-- Basic Pilot Information -->
+        <div class="flex items-center justify-between">
+            <div class="font-semibold text-purple-400">${f.callsign}</div>
+            <div class="text-purple-100">${f.altitude} ft</div>
         </div>
+
+        <div class="flex items-center justify-between">
+            <div class="text-purple-100">${f.name}</div>
+            <div class="text-purple-100">GS: ${f.groundspeed} kts</div>
+        </div>
+
+        <!-- Flight Plan Information (only shown if available) -->
+        ${f.flight_plan ? `
+        <div class="text-purple-100">
+            <div class="font-semibold text-purple-400">Flight Plan:</div>
+            <div>Aircraft: ${f.flight_plan.aircraft_short}</div>
+            <div>Departure: ${f.flight_plan.departure}</div>
+            <div>Arrival: ${f.flight_plan.arrival}</div>
+        </div>
+        ` : ''}
+
     </div>
-`)
+</div>
+
+`, { autoPan: false })
 				.on('click', () => {
 					$selectedPilot = f;
 				})
