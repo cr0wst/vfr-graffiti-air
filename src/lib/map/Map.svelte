@@ -10,6 +10,14 @@
 	export let pilots: any[] = [];
 	export let controllers: any[] = [];
 
+	$: if (pilots) {
+		updateMap();
+	}
+
+	$: if (controllers) {
+		updateMap();
+	}
+
 	let mapElement: any;
 	let map: any;
 	let leaflet: any;
@@ -201,7 +209,7 @@
 
 	function updateControllerLayer() {
 		if (controllerLayer) {
-			map.removeLayer(controllerLayer);
+			controllerLayer.forEach((cl) => map.removeLayer(cl))
 		}
 
 		controllerLayer = controllerGroups.flatMap(group => {
@@ -251,7 +259,7 @@
 
 	function updatePilotLayer() {
 		if (pilotLayer) {
-			map.removeLayer(pilotLayer);
+			pilotLayer.forEach((pl) => map.removeLayer(pl))
 		}
 
 		pilotLayer = pilots.map((f) => {
