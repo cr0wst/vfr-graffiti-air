@@ -5,14 +5,10 @@
 	import { browser } from '$app/environment';
 	import { selectedPilot } from '$lib/stores';
 	import * as turf from '@turf/turf';
+	import { pilots } from '$lib/store';
 
 	export let boundaries: any;
-	export let pilots: any[] = [];
 	export let controllers: any[] = [];
-
-	$: if (pilots) {
-		updateMap();
-	}
 
 	let centerControllerCenters = [];
 
@@ -29,7 +25,7 @@
 			});
 			// Find the centroid of the transceivers turf points
 			if (transceivers.length !== 0) {
-				return { callsign: c.callsign, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
+				return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
 			}
 		}).filter((c) => c);
 
@@ -126,6 +122,10 @@
 		}
 	});
 
+	pilots.subscribe(() => {
+		updateMap();
+	})
+
 	onDestroy(async () => {
 		if (map) {
 			map.remove();
@@ -173,7 +173,7 @@
 								return turf.booleanPointInPolygon(c.center, feature) === true;
 					});
 					if (controllerInBoundary) {
-						const controller = controllers.find((c) => c.callsign == controllerInBoundary.callsign);
+						const controller = controllerInBoundary.controller;
 						layer.setStyle({
 							fillOpacity: 0.2,
 							opacity: 1
@@ -275,7 +275,7 @@
 			pilotLayer.forEach((pl) => map.removeLayer(pl))
 		}
 
-		pilotLayer = pilots.map((f) => {
+		pilotLayer = $pilots.map((f) => {
 			const color = '#a96aad';
 
 			// add some transparency if the plane is not selected
