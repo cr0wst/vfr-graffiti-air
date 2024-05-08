@@ -76,8 +76,6 @@
 		};
 	});
 
-	console.log(JSON.stringify(controllerGroups.map(cg => cg.controllers.map(c => c.callsign))));
-
 	selectedPilot.subscribe((value) => {
 		updateMap();
 	});
