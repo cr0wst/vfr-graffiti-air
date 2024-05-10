@@ -6,9 +6,19 @@
 	import { selectedPilot } from '$lib/stores';
 	import * as turf from '@turf/turf';
 	import { pilots } from '$lib/store';
+	import { airports } from '$lib/map/airports';
 
 	export let boundaries: any;
 	export let controllers: any[] = [];
+
+	let activeAirports: any[] = [];
+	$: if(controllers && $pilots) {
+		activeAirports = airports.map((a) => {
+			const arrivals = $pilots.filter((p) => p.flight_plan?.arrival === a.icao);
+			const departures = $pilots.filter((p) => p.flight_plan?.departure === a.icao);
+			return { ...a, arrivals, departures };
+		}).filter((a) => a.arrivals.length > 0 || a.departures.length > 0);
+	}
 
 	let centerControllerCenters = [];
 
@@ -82,6 +92,7 @@
 	let map: any;
 	let leaflet: any;
 	let pilotLayer: any;
+	let airportLayer: any;
 	let geoJsonLayer: any;
 	let geoLabels: any[] = [];
 	let controllerLayer: any;
@@ -135,6 +146,7 @@
 	function updateMap() {
 		if (leaflet && map) {
 			updateControllerLayer();
+			updateAirportLayer();
 			updateGeoJsonLayer();
 			updatePilotLayer();
 		}
@@ -283,8 +295,8 @@
 				.marker([f.latitude, f.longitude], {
 					icon: leaflet.divIcon({
 						html: `<div class="plane-icon hover:pointer" style="--fill-color: ${color}">${PlaneIcon}</div>`,
-						iconSize: [14, 14],
-						iconAnchor: [5, 5],
+						iconSize: [16, 16],
+						iconAnchor: [8, 8],
 						className: ''
 					}),
 					rotationAngle: f.heading,
@@ -329,6 +341,52 @@
 					marker.closePopup();
 				})
 				.addTo(map);
+
+			return marker;
+		});
+	}
+
+	function updateAirportLayer() {
+		if (airportLayer) {
+			airportLayer.forEach((al) => map.removeLayer(al))
+		}
+
+		airportLayer = activeAirports.map((a) => {
+			const color = '#ffffff';
+
+			// add some transparency if the plane is not selected
+			const marker = leaflet
+				.marker([a.lat, a.lon], {
+					icon: leaflet.divIcon({
+						html: `<div class="bg-orange-300 w-2 h-2 rounded-sm"></div>`, // Using Tailwind to make the icon smaller
+						iconSize: [8, 8], // These pixel values correspond to Tailwind's w-3 and h-3 which are 12px
+						iconAnchor: [4, 4], // Center the anchor for the smaller icon
+						className: ''
+					}),
+					rotationOrigin: 'center',
+					interactive: true,
+					opacity: 1
+				})
+				.bindPopup(`<div class="text-xs p-2 bg-zinc-900 bg-opacity-75 border border-purple-300 rounded-lg shadow-md">
+        <div class="flex flex-col space-y-1 py-1 min-w-48 max-w-64">
+            <div class="font-semibold text-purple-400">${a.name}</div>
+            <div class="text-purple-200">${a.state}</div>  <!-- State displayed below the name -->
+            <div class="flex items-center justify-between">
+                <div class="text-purple-100">Arrivals: ${a.arrivals.length}</div>
+                <div class="text-purple-100">Departures: ${a.departures.length}</div>
+            </div>
+        </div>
+    </div>`, { autoPan: false })
+				.on('mouseover', function() {
+					marker.openPopup();
+				})
+				.on('mouseout', function() {
+					marker.closePopup();
+				})
+				.addTo(map);
+
+			return marker;
+
 
 			return marker;
 		});
