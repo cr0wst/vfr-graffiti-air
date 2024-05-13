@@ -10,3 +10,5 @@ export const controllers = writable<Controller[]>([]);
 export const airports = writable<Airport[]>(airportData);
 
 export const boundaries = writable<any>(null);
+
+export const activePilot = writable<Pilot | null>(null);

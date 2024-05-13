@@ -4,8 +4,8 @@
 	import PlaneIcon from '$lib/map/plane.svg?raw';
 	import { browser } from '$app/environment';
 	import * as turf from '@turf/turf';
-	import { airports, boundaries, controllers, pilots } from '$lib/stores';
-	import {ui} from '$lib/stores/ui';
+	import { activePilot, airports, boundaries, controllers, pilots } from '$lib/stores';
+	import { ui } from '$lib/stores/ui';
 	import type { Controller } from '../../types';
 
 	/**
@@ -91,12 +91,15 @@
 		airportLayer: [] as any[],
 		controllerLayer: [] as any[],
 		pilotLayer: [] as any[],
-		geoJsonLayer: [] as any[]
+		geoJsonLayer: [] as any[],
+		polylineLayer: [] as any[]
 	};
 	let mapElement: any;
 	let map: any;
 	let leaflet: any;
 	let geoLabels: any[] = [];
+
+	let mapZoomLevel = 3;
 
 	onMount(async () => {
 		if (browser) {
@@ -107,6 +110,16 @@
 				center: [0, 0],
 				zoom: 3,
 				zoomControl: false
+			});
+
+			map.on('zoomend', function() {
+				mapZoomLevel = map.getZoom();
+				updatePilotLayer(); // Recreate pilot markers with new icon sizes
+			});
+
+			map.on('click', function() {
+				$activePilot = null;
+				updatePilotLayer();
 			});
 
 			leaflet
@@ -233,6 +246,11 @@
 		updateMap();
 	});
 
+
+	activePilot.subscribe(() => {
+		updateMap();
+	});
+
 	function updateControllerLayer() {
 		if (mapLayers.controllerLayer) {
 			mapLayers.controllerLayer.forEach((cl: any) => map.removeLayer(cl));
@@ -289,7 +307,12 @@
 			mapLayers.pilotLayer.forEach((pl) => map.removeLayer(pl));
 		}
 
+		if (mapLayers.polylineLayer) {
+			mapLayers.polylineLayer.forEach((pl) => map.removeLayer(pl));
+		}
+
 		if ($ui.showLayers.pilots) {
+			const iconSize = calculateIconSize();
 
 			mapLayers.pilotLayer = $pilots.map((f) => {
 				const color = '#a96aad';
@@ -299,8 +322,8 @@
 					.marker([f.latitude, f.longitude], {
 						icon: leaflet.divIcon({
 							html: `<div class="plane-icon hover:pointer" style="--fill-color: ${color}">${PlaneIcon}</div>`,
-							iconSize: [16, 16],
-							iconAnchor: [8, 8],
+							iconSize: [iconSize, iconSize],
+							iconAnchor: [iconSize / 2, iconSize / 2],
 							className: ''
 						}),
 						rotationAngle: f.heading,
@@ -339,10 +362,35 @@
 						marker.openPopup();
 					})
 					.on('mouseout', function() {
-						marker.closePopup();
+							marker.closePopup();
+					})
+					.on('click', (e: any) => {
+						$activePilot = f;
+						zoomAndCenterMap(f.latitude, f.longitude);
+						e.originalEvent.preventDefault()
 					})
 					.addTo(map);
 
+				// If the $activePilot is the same as the current pilot, draw a line between their departure, arrival, and current position
+				// in orange to indicate the path. This is only drawn if the pilot has a flight plan.
+				if ($activePilot && $activePilot.cid === f.cid && f.flight_plan) {
+					// Clear the polyline layer
+					const departure = $airports.find((a) => a.icao === f.flight_plan.departure);
+					const arrival = $airports.find((a) => a.icao === f.flight_plan.arrival);
+
+					if (departure && arrival) {
+						const line = leaflet.polyline([
+							[departure.lat, departure.lon],
+							[f.latitude, f.longitude],
+							[arrival.lat, arrival.lon]
+						], {
+							color: '#f59e0b',
+							weight: 2,
+							opacity: 1
+						}).addTo(map);
+						mapLayers.polylineLayer.push(line);
+					}
+				}
 				return marker;
 			});
 		}
@@ -387,9 +435,6 @@
 						marker.closePopup();
 					})
 					.addTo(map);
-
-				return marker;
-
 
 				return marker;
 			});
@@ -453,6 +498,29 @@
 				return 'X'; // Default letter if no match found
 		}
 	}
+
+	/**
+	 * Calculate the size of the icon based on the current zoom level
+	 */
+	function calculateIconSize() {
+		const currentSize = 8 + (mapZoomLevel - 3);
+		return Math.max(currentSize, 8);
+	}
+
+	/**
+	 * Function to zoom into and center the map on a pilot's coordinates
+	 */
+	function zoomAndCenterMap(latitude: number, longitude: number) {
+		const newZoomLevel = Math.max(5, map.getZoom()); // Increase current zoom by 2 levels
+		map.setView([latitude, longitude], newZoomLevel, {
+			animate: true,
+			pan: {
+				duration: 1.0
+			}
+		});
+		updateMap();
+	}
+
 </script>
 
 <div bind:this={mapElement} id="map"></div>

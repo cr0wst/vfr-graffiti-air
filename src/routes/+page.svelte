@@ -2,8 +2,9 @@
 	import Map from '$lib/map/Map.svelte';
 	import { invalidate } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { controllers, pilots } from '$lib/stores';
+	import { activePilot, controllers, pilots } from '$lib/stores';
 	import LayerToggle from '$lib/LayerToggle.svelte';
+	import PilotInfo from '$lib/PilotInfo.svelte';
 
 	onMount(() => {
 		const interval = setInterval(() => {
@@ -21,6 +22,12 @@
 	<div class="flex-1 flex w-full z-0" id="content">
 		<Map />
 	</div>
+
+{#if $activePilot}
+	<div class="absolute right-10 top-1/3 transform -translate-y-1/3 z-10 w-1/3">
+		<PilotInfo pilot={$activePilot}/>
+	</div>
+{/if}
 <style lang="postcss">
 
 </style>
