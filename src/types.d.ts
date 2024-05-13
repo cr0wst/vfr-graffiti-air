@@ -34,3 +34,40 @@ export type Pilot = {
 	logon_time: string;
 	last_updated: string;
 };
+
+export type Controller = {
+	cid: number;
+	name: string;
+	callsign: string;
+	frequency: string;
+	facility: number;
+	rating: number;
+	server: string;
+	visual_range: number;
+	text_atis: string[];
+	last_updated: string;
+	logon_time: string;
+	facility_details: {
+		id: number;
+		short: string;
+		long: string;
+	}[];
+	transceivers: {
+		frequency: number;
+		latDeg: number;
+		lonDeg: number;
+	}[];
+};
+
+export type Airport = {
+	icao: string;
+	iata: string;
+	name: string;
+	city: string;
+	state: string;
+	country: string;
+	elevation: number;
+	lat: number;
+	lon: number;
+	tz: string;
+};

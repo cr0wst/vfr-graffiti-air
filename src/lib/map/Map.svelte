@@ -3,22 +3,14 @@
 	import { onDestroy, onMount } from 'svelte';
 	import PlaneIcon from '$lib/map/plane.svg?raw';
 	import { browser } from '$app/environment';
-	import { selectedPilot } from '$lib/stores';
 	import * as turf from '@turf/turf';
-	import { pilots } from '$lib/store';
-	import { airports } from '$lib/map/airports';
+	import { pilots, boundaries, controllers, airports } from '$lib/stores';
 
-	export let boundaries: any;
-	export let controllers: any[] = [];
-
-	let activeAirports: any[] = [];
-	$: if(controllers && $pilots) {
-		activeAirports = airports.map((a) => {
+	let activeAirports = $airports.map((a) => {
 			const arrivals = $pilots.filter((p) => p.flight_plan?.arrival === a.icao);
 			const departures = $pilots.filter((p) => p.flight_plan?.departure === a.icao);
 			return { ...a, arrivals, departures };
 		}).filter((a) => a.arrivals.length > 0 || a.departures.length > 0);
-	}
 
 	let centerControllerCenters = [];
 
@@ -26,10 +18,62 @@
 
 	let controllerGroups = [];
 
-	$: if (controllers) {
+	// Mapping Layers
+	let mapElement: any;
+	let map: any;
+	let leaflet: any;
+	let pilotLayer: any;
+	let airportLayer: any;
+	let geoJsonLayer: any;
+	let geoLabels: any[] = [];
+	let controllerLayer: any;
+
+	onMount(async () => {
+		if (browser) {
+			leaflet = await import('leaflet');
+			await import('leaflet-rotatedmarker');
+
+			map = leaflet.map(mapElement, {
+				center: [0, 0],
+				zoom: 3,
+				zoomControl: false
+			});
+
+			leaflet
+				.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.{ext}', {
+					noWrap: true,
+					minZoom: 3,
+					maxZoom: 20,
+					attribution:
+						'&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+					ext: 'png'
+				})
+				.addTo(map);
+
+			var southWest = leaflet.latLng(-85.05112878, -180),
+				northEast = leaflet.latLng(85.05112878, 180),
+				bounds = leaflet.latLngBounds(southWest, northEast);
+
+			map.setMaxBounds(bounds);
+
+			updateMap();
+		}
+	});
+
+	pilots.subscribe(() => {
+		updateMap();
+	})
+
+	onDestroy(async () => {
+		if (map) {
+			map.remove();
+		}
+	});
+
+	controllers.subscribe(() => {
 		updateMap();
 
-		centerControllerCenters = controllers.filter((c) => c.facility == 6).map((c) => {
+		centerControllerCenters = $controllers.filter((c) => c.facility == 6).map((c) => {
 			const transceivers = (c.transceivers || []).map((t) => {
 				return turf.point([t.lonDeg, t.latDeg]);
 			});
@@ -39,7 +83,7 @@
 			}
 		}).filter((c) => c);
 
-		nonCenterControllerCenters = controllers.filter((c) => c.facility !== 6).map((c) => {
+		nonCenterControllerCenters = $controllers.filter((c) => c.facility !== 6).map((c) => {
 			const transceivers = (c.transceivers || []).map((t) => {
 				return turf.point([t.lonDeg, t.latDeg]);
 			});
@@ -86,61 +130,6 @@
 				center: bestCenter
 			};
 		});
-	}
-
-	let mapElement: any;
-	let map: any;
-	let leaflet: any;
-	let pilotLayer: any;
-	let airportLayer: any;
-	let geoJsonLayer: any;
-	let geoLabels: any[] = [];
-	let controllerLayer: any;
-
-	selectedPilot.subscribe((value) => {
-		updateMap();
-	});
-
-	onMount(async () => {
-		if (browser) {
-			leaflet = await import('leaflet');
-			await import('leaflet-rotatedmarker');
-
-			map = leaflet.map(mapElement, {
-				center: [0, 0],
-				zoom: 3,
-				zoomControl: false
-			});
-
-			leaflet
-				.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.{ext}', {
-					noWrap: true,
-					minZoom: 3,
-					maxZoom: 20,
-					attribution:
-						'&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-					ext: 'png'
-				})
-				.addTo(map);
-
-			var southWest = leaflet.latLng(-85.05112878, -180),
-				northEast = leaflet.latLng(85.05112878, 180),
-				bounds = leaflet.latLngBounds(southWest, northEast);
-
-			map.setMaxBounds(bounds);
-
-			updateMap();
-		}
-	});
-
-	pilots.subscribe(() => {
-		updateMap();
-	})
-
-	onDestroy(async () => {
-		if (map) {
-			map.remove();
-		}
 	});
 
 	function updateMap() {
@@ -164,7 +153,7 @@
 		}
 
 		geoJsonLayer = leaflet
-			.geoJson(boundaries, {
+			.geoJson($boundaries, {
 				style: (feature) => {
 					const color = '#555555';
 
@@ -331,9 +320,6 @@
 </div>
 
 `, { autoPan: false })
-				.on('click', () => {
-					$selectedPilot = f;
-				})
 				.on('mouseover', function() {
 					marker.openPopup();
 				})

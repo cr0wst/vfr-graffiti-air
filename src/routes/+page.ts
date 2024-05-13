@@ -1,14 +1,12 @@
 import type { PageLoad, PageLoadEvent } from './$types';
-import { pilots } from '$lib/store';
+import { boundaries, controllers, pilots } from '$lib/stores';
 
 export const load: PageLoad = async ({ fetch, depends }: PageLoadEvent) => {
-	depends('app:loadData');
+	boundaries.set(await fetchBoundaries(fetch));
 
+	depends('app:loadData');
 	pilots.set(await fetchPilots(fetch));
-	return {
-		boundaries: await fetchBoundaries(fetch),
-		controllers: await fetchControllers(fetch)
-	};
+	controllers.set(await fetchControllers(fetch));
 };
 
 async function fetchBoundaries(fetch: typeof window.fetch) {
