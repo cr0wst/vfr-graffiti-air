@@ -4,29 +4,98 @@
 	import PlaneIcon from '$lib/map/plane.svg?raw';
 	import { browser } from '$app/environment';
 	import * as turf from '@turf/turf';
-	import { pilots, boundaries, controllers, airports } from '$lib/stores';
+	import { airports, boundaries, controllers, pilots, ui } from '$lib/stores';
+	import type { Controller } from '../../types';
 
+	/**
+	 * Active airports are airports that have at least one arrival or departure
+	 */
 	let activeAirports = $airports.map((a) => {
-			const arrivals = $pilots.filter((p) => p.flight_plan?.arrival === a.icao);
-			const departures = $pilots.filter((p) => p.flight_plan?.departure === a.icao);
-			return { ...a, arrivals, departures };
-		}).filter((a) => a.arrivals.length > 0 || a.departures.length > 0);
+		const arrivals = $pilots.filter((p) => p.flight_plan?.arrival === a.icao);
+		const departures = $pilots.filter((p) => p.flight_plan?.departure === a.icao);
+		return { ...a, arrivals, departures };
+	}).filter((a) => a.arrivals.length > 0 || a.departures.length > 0);
 
-	let centerControllerCenters = [];
+	/**
+	 * Center Controller Centers are the center of the transceivers for each center controller
+	 */
+	let centerControllerCenters = $controllers.filter((c) => c.facility == 6).map((c) => {
+		const transceivers = (c.transceivers || []).map((t) => {
+			return turf.point([t.lonDeg, t.latDeg]);
+		});
+		// Find the centroid of the transceivers turf points
+		if (transceivers.length !== 0) {
+			return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
+		}
+	}).filter((c) => c);
+	;
 
-	let nonCenterControllerCenters = [];
+	/**
+	 * Non Center Controller Centers are the center of the transceivers for each controller that is not a center controller
+	 */
+	let nonCenterControllerCenters = $controllers.filter((c) => c.facility !== 6).map((c) => {
+		const transceivers = (c.transceivers || []).map((t) => {
+			return turf.point([t.lonDeg, t.latDeg]);
+		});
+		// Find the centroid of the transceivers turf points
+		if (transceivers.length !== 0) {
+			return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
+		}
+	}).filter((c) => c);
+	;
 
-	let controllerGroups = [];
+	/**
+	 * Controller Groups are groups of controllers that share the same prefix in their callsign
+	 */
+	let controllerGroups = nonCenterControllerCenters.reduce((clusters: any[], current: any) => {
+		// Extract the prefix from the callsign up to the first underscore
+		const currentPrefix = current.controller.callsign.split('_')[0];
+
+		// Find a cluster that has a matching prefix
+		const foundCluster = clusters.find(cluster =>
+			cluster.some((member: any) => {
+				const memberPrefix = member.controller.callsign.split('_')[0];
+				return memberPrefix === currentPrefix;
+			})
+		);
+
+		if (foundCluster) {
+			foundCluster.push(current);
+		} else {
+			clusters.push([current]);
+		}
+		return clusters;
+	}, []).map(cluster => {
+		// Determine the best center point based on facility type priority
+		const preferredCenters = cluster.filter((c: any) => [2, 3, 4].includes(c.controller.facility)); // DEL, GND, TWR
+		const appCenters = cluster.filter((c: any) => c.controller.facility === 5); // APP
+
+		let bestCenter;
+		if (preferredCenters.length > 0) {
+			bestCenter = turf.center(turf.featureCollection(preferredCenters.map((c: any) => turf.point(c.center.coordinates)))).geometry;
+		} else if (appCenters.length > 0) {
+			bestCenter = turf.center(turf.featureCollection(appCenters.map((c: any) => turf.point(c.center.coordinates)))).geometry;
+		} else {
+			bestCenter = turf.center(turf.featureCollection(cluster.map((c: any) => turf.point(c.center.coordinates)))).geometry;
+		}
+
+		return {
+			controllers: cluster.map((c: any) => c.controller),
+			center: bestCenter
+		};
+	});
 
 	// Mapping Layers
+	const mapLayers = {
+		airportLayer: [] as any[],
+		controllerLayer: [] as any[],
+		pilotLayer: [] as any[],
+		geoJsonLayer: [] as any[]
+	};
 	let mapElement: any;
 	let map: any;
 	let leaflet: any;
-	let pilotLayer: any;
-	let airportLayer: any;
-	let geoJsonLayer: any;
 	let geoLabels: any[] = [];
-	let controllerLayer: any;
 
 	onMount(async () => {
 		if (browser) {
@@ -50,9 +119,7 @@
 				})
 				.addTo(map);
 
-			var southWest = leaflet.latLng(-85.05112878, -180),
-				northEast = leaflet.latLng(85.05112878, 180),
-				bounds = leaflet.latLngBounds(southWest, northEast);
+			let bounds = leaflet.latLngBounds(leaflet.latLng(-85.05112878, -180), leaflet.latLng(85.05112878, 180));
 
 			map.setMaxBounds(bounds);
 
@@ -62,74 +129,12 @@
 
 	pilots.subscribe(() => {
 		updateMap();
-	})
+	});
 
 	onDestroy(async () => {
 		if (map) {
 			map.remove();
 		}
-	});
-
-	controllers.subscribe(() => {
-		updateMap();
-
-		centerControllerCenters = $controllers.filter((c) => c.facility == 6).map((c) => {
-			const transceivers = (c.transceivers || []).map((t) => {
-				return turf.point([t.lonDeg, t.latDeg]);
-			});
-			// Find the centroid of the transceivers turf points
-			if (transceivers.length !== 0) {
-				return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
-			}
-		}).filter((c) => c);
-
-		nonCenterControllerCenters = $controllers.filter((c) => c.facility !== 6).map((c) => {
-			const transceivers = (c.transceivers || []).map((t) => {
-				return turf.point([t.lonDeg, t.latDeg]);
-			});
-			// Find the centroid of the transceivers turf points
-			if (transceivers.length !== 0) {
-				return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
-			}
-		}).filter((c) => c);
-
-		controllerGroups = nonCenterControllerCenters.reduce((clusters, current) => {
-			// Extract the prefix from the callsign up to the first underscore
-			const currentPrefix = current.controller.callsign.split('_')[0];
-
-			// Find a cluster that has a matching prefix
-			const foundCluster = clusters.find(cluster =>
-				cluster.some(member => {
-					const memberPrefix = member.controller.callsign.split('_')[0];
-					return memberPrefix === currentPrefix;
-				})
-			);
-
-			if (foundCluster) {
-				foundCluster.push(current);
-			} else {
-				clusters.push([current]);
-			}
-			return clusters;
-		}, []).map(cluster => {
-			// Determine the best center point based on facility type priority
-			const preferredCenters = cluster.filter(c => [2, 3, 4].includes(c.controller.facility)); // DEL, GND, TWR
-			const appCenters = cluster.filter(c => c.controller.facility === 5); // APP
-
-			let bestCenter;
-			if (preferredCenters.length > 0) {
-				bestCenter = turf.center(turf.featureCollection(preferredCenters.map(c => turf.point(c.center.coordinates)))).geometry;
-			} else if (appCenters.length > 0) {
-				bestCenter = turf.center(turf.featureCollection(appCenters.map(c => turf.point(c.center.coordinates)))).geometry;
-			} else {
-				bestCenter = turf.center(turf.featureCollection(cluster.map(c => turf.point(c.center.coordinates)))).geometry;
-			}
-
-			return {
-				controllers: cluster.map(c => c.controller),
-				center: bestCenter
-			};
-		});
 	});
 
 	function updateMap() {
@@ -142,8 +147,8 @@
 	}
 
 	function updateGeoJsonLayer() {
-		if (geoJsonLayer) {
-			map.removeLayer(geoJsonLayer);
+		if (mapLayers.geoJsonLayer) {
+			map.removeLayer(mapLayers.geoJsonLayer);
 		}
 
 		if (geoLabels) {
@@ -151,36 +156,37 @@
 				map.removeLayer(geoLabels[i]);
 			}
 		}
+		if ($ui.showLayers.boundaries) {
 
-		geoJsonLayer = leaflet
-			.geoJson($boundaries, {
-				style: (feature) => {
-					const color = '#555555';
+			mapLayers.geoJsonLayer = leaflet
+				.geoJson($boundaries, {
+					style: () => {
+						const color = '#555555';
 
-					const weight = .5;
-					return {
-						fillColor: color,
-						// set the weight to 3 if the plane is selected and this is a departure or arrival artcc
-						weight: weight,
-						opacity: 0,
-						color: 'white',
-						// set fill opacity to .2 if there's a plane selected
-						fillOpacity: 0
-					};
-				},
-				onEachFeature: (feature, layer) => {
-					// Determine if a controller is in this boundary
-					const controllerInBoundary = centerControllerCenters.find((c) => {
-								return turf.booleanPointInPolygon(c.center, feature) === true;
-					});
-					if (controllerInBoundary) {
-						const controller = controllerInBoundary.controller;
-						layer.setStyle({
-							fillOpacity: 0.2,
-							opacity: 1
+						const weight = .5;
+						return {
+							fillColor: color,
+							// set the weight to 3 if the plane is selected and this is a departure or arrival artcc
+							weight: weight,
+							opacity: 0,
+							color: 'white',
+							// set fill opacity to .2 if there's a plane selected
+							fillOpacity: 0
+						};
+					},
+					onEachFeature: (feature: any, layer: any) => {
+						// Determine if a controller is in this boundary
+						const controllerInBoundary = centerControllerCenters.find((c) => {
+							return turf.booleanPointInPolygon(c.center, feature) === true;
 						});
+						if (controllerInBoundary) {
+							const controller = controllerInBoundary.controller;
+							layer.setStyle({
+								fillOpacity: 0.2,
+								opacity: 1
+							});
 
-						layer.bindPopup(`
+							layer.bindPopup(`
 			    <div class="text-xs p-2 bg-zinc-900 bg-opacity-50 border border-purple-300">
          <div class="flex flex-col space-y-1 py-1 min-w-48 max-w-64">
 
@@ -194,48 +200,53 @@
     </div>
     </div>
 `, { autoPan: false })
-							.on('mouseover', function() {
-								layer.openPopup();
-							})
-							.on('mouseout', function() {
-								layer.closePopup();
-							})
+								.on('mouseover', function() {
+									layer.openPopup();
+								})
+								.on('mouseout', function() {
+									layer.closePopup();
+								});
 
-						const label = leaflet
-							.marker(layer.getBounds().getCenter(), {
-								icon: leaflet.divIcon({
-									html: `<div class="label">${feature.properties.id}</div>`,
-									iconSize: [100, 40],
-									iconAnchor: [50, 20],
-									className: ''
-								}),
-								interactive: false,
-								opacity: 1
-							})
-							.addTo(map);
+							const label = leaflet
+								.marker(layer.getBounds().getCenter(), {
+									icon: leaflet.divIcon({
+										html: `<div class="label">${feature.properties.id}</div>`,
+										iconSize: [100, 40],
+										iconAnchor: [50, 20],
+										className: ''
+									}),
+									interactive: false,
+									opacity: 1
+								})
+								.addTo(map);
 
-						geoLabels.push(label);
+							geoLabels.push(label);
+						}
 					}
-				}
-			})
-			.addTo(map);
+				})
+				.addTo(map);
+		}
 	}
 
-	function updateControllerLayer() {
-		if (controllerLayer) {
-			controllerLayer.forEach((cl) => map.removeLayer(cl))
-		}
+	ui.subscribe(() => {
+		updateMap();
+	});
 
-		controllerLayer = controllerGroups.flatMap(group => {
-			// Create a div to hold all markers in the group, using flexbox for horizontal layout
-			const groupHtml = group.controllers.sort((a, b) => a.facility - b.facility).map(controller => `
+	function updateControllerLayer() {
+		if (mapLayers.controllerLayer) {
+			mapLayers.controllerLayer.forEach((cl: any) => map.removeLayer(cl));
+		}
+		if ($ui.showLayers.controllers) {
+			mapLayers.controllerLayer = controllerGroups.flatMap(group => {
+				// Create a div to hold all markers in the group, using flexbox for horizontal layout
+				const groupHtml = group.controllers.sort((a: Controller, b: Controller) => a.facility - b.facility).map((controller: Controller) => `
         <div class="hover:pointer w-3 h-3 flex items-center justify-center text-[.65rem] font-bold rounded-none"
             style="background-color: ${getFacilityColor(controller.facility).bgColor}; color:${getFacilityColor(controller.facility).textColor}">
             ${getFacilityLetter(controller.facility)}
         </div>
     `).join('');
 
-			const popupContent = group.controllers.map(controller => `
+				const popupContent = group.controllers.map((controller: Controller) => `
     <div class="flex flex-col space-y-1 py-1 min-w-48 max-w-64">
 
     <div class="flex items-center space-x-2">
@@ -248,51 +259,54 @@
     </div>
 `).join('');
 
-			// Create a single marker for the whole group, positioned at the group's central coordinate
-			const marker = leaflet.marker([group.center.coordinates[1], group.center.coordinates[0]], {
-				icon: leaflet.divIcon({
-					html: `<div class="flex">${groupHtml}</div>`, // Use Tailwind's flex and negative margin for overlap adjustment
-					className: '', // Ensure no extra padding or margins are applied from default Leaflet classes
-					iconSize: [null, null] // Disable automatic sizing to allow CSS control
-				}),
-				interactive: true,
-				opacity: 1
-			}).bindPopup(`
+				// Create a single marker for the whole group, positioned at the group's central coordinate
+				const marker = leaflet.marker([group.center.coordinates[1], group.center.coordinates[0]], {
+					icon: leaflet.divIcon({
+						html: `<div class="flex">${groupHtml}</div>`, // Use Tailwind's flex and negative margin for overlap adjustment
+						className: '', // Ensure no extra padding or margins are applied from default Leaflet classes
+						iconSize: [null, null] // Disable automatic sizing to allow CSS control
+					}),
+					interactive: true,
+					opacity: 1
+				}).bindPopup(`
 			    <div class="text-xs p-2 bg-zinc-900 bg-opacity-50 border border-purple-300">
         ${popupContent}
     </div>
-			`,{ autoPan: false }).on('mouseover', function() {
-				marker.openPopup();
-			}).on('mouseout', function() {
-				marker.closePopup();
-			}).addTo(map);
+			`, { autoPan: false }).on('mouseover', function() {
+					marker.openPopup();
+				}).on('mouseout', function() {
+					marker.closePopup();
+				}).addTo(map);
 
-			return marker;
-		});
+				return marker;
+			});
+		}
 	}
 
 	function updatePilotLayer() {
-		if (pilotLayer) {
-			pilotLayer.forEach((pl) => map.removeLayer(pl))
+		if (mapLayers.pilotLayer) {
+			mapLayers.pilotLayer.forEach((pl) => map.removeLayer(pl));
 		}
 
-		pilotLayer = $pilots.map((f) => {
-			const color = '#a96aad';
+		if ($ui.showLayers.pilots) {
 
-			// add some transparency if the plane is not selected
-			const marker = leaflet
-				.marker([f.latitude, f.longitude], {
-					icon: leaflet.divIcon({
-						html: `<div class="plane-icon hover:pointer" style="--fill-color: ${color}">${PlaneIcon}</div>`,
-						iconSize: [16, 16],
-						iconAnchor: [8, 8],
-						className: ''
-					}),
-					rotationAngle: f.heading,
-					rotationOrigin: 'center',
-					interactive: true,
-					opacity: 1
-				}).bindPopup(`<div class="text-xs p-2 bg-zinc-900 bg-opacity-50 border border-purple-300">
+			mapLayers.pilotLayer = $pilots.map((f) => {
+				const color = '#a96aad';
+
+				// add some transparency if the plane is not selected
+				const marker = leaflet
+					.marker([f.latitude, f.longitude], {
+						icon: leaflet.divIcon({
+							html: `<div class="plane-icon hover:pointer" style="--fill-color: ${color}">${PlaneIcon}</div>`,
+							iconSize: [16, 16],
+							iconAnchor: [8, 8],
+							className: ''
+						}),
+						rotationAngle: f.heading,
+						rotationOrigin: 'center',
+						interactive: true,
+						opacity: 1
+					}).bindPopup(`<div class="text-xs p-2 bg-zinc-900 bg-opacity-50 border border-purple-300">
     <div class="flex flex-col space-y-1 py-1 min-w-48 max-w-64">
 
         <!-- Basic Pilot Information -->
@@ -320,40 +334,42 @@
 </div>
 
 `, { autoPan: false })
-				.on('mouseover', function() {
-					marker.openPopup();
-				})
-				.on('mouseout', function() {
-					marker.closePopup();
-				})
-				.addTo(map);
+					.on('mouseover', function() {
+						marker.openPopup();
+					})
+					.on('mouseout', function() {
+						marker.closePopup();
+					})
+					.addTo(map);
 
-			return marker;
-		});
+				return marker;
+			});
+		}
 	}
 
 	function updateAirportLayer() {
-		if (airportLayer) {
-			airportLayer.forEach((al) => map.removeLayer(al))
+		if (mapLayers.airportLayer) {
+			mapLayers.airportLayer.forEach((al) => map.removeLayer(al));
 		}
 
-		airportLayer = activeAirports.map((a) => {
-			const color = '#ffffff';
+		if ($ui.showLayers.airports) {
+			mapLayers.airportLayer = activeAirports.map((a) => {
+				const color = '#ffffff';
 
-			// add some transparency if the plane is not selected
-			const marker = leaflet
-				.marker([a.lat, a.lon], {
-					icon: leaflet.divIcon({
-						html: `<div class="bg-orange-300 w-2 h-2 rounded-sm"></div>`, // Using Tailwind to make the icon smaller
-						iconSize: [8, 8], // These pixel values correspond to Tailwind's w-3 and h-3 which are 12px
-						iconAnchor: [4, 4], // Center the anchor for the smaller icon
-						className: ''
-					}),
-					rotationOrigin: 'center',
-					interactive: true,
-					opacity: 1
-				})
-				.bindPopup(`<div class="text-xs p-2 bg-zinc-900 bg-opacity-75 border border-purple-300 rounded-lg shadow-md">
+				// add some transparency if the plane is not selected
+				const marker = leaflet
+					.marker([a.lat, a.lon], {
+						icon: leaflet.divIcon({
+							html: `<div class="bg-orange-300 w-2 h-2 rounded-sm"></div>`, // Using Tailwind to make the icon smaller
+							iconSize: [8, 8], // These pixel values correspond to Tailwind's w-3 and h-3 which are 12px
+							iconAnchor: [4, 4], // Center the anchor for the smaller icon
+							className: ''
+						}),
+						rotationOrigin: 'center',
+						interactive: true,
+						opacity: 1
+					})
+					.bindPopup(`<div class="text-xs p-2 bg-zinc-900 bg-opacity-75 border border-purple-300 rounded-lg shadow-md">
         <div class="flex flex-col space-y-1 py-1 min-w-48 max-w-64">
             <div class="font-semibold text-purple-400">${a.name}</div>
             <div class="text-purple-200">${a.state}</div>  <!-- State displayed below the name -->
@@ -363,19 +379,20 @@
             </div>
         </div>
     </div>`, { autoPan: false })
-				.on('mouseover', function() {
-					marker.openPopup();
-				})
-				.on('mouseout', function() {
-					marker.closePopup();
-				})
-				.addTo(map);
+					.on('mouseover', function() {
+						marker.openPopup();
+					})
+					.on('mouseout', function() {
+						marker.closePopup();
+					})
+					.addTo(map);
 
-			return marker;
+				return marker;
 
 
-			return marker;
-		});
+				return marker;
+			});
+		}
 	}
 
 	function convertAltitudeToFlightLevel(altitude: number) {
@@ -383,7 +400,7 @@
 		return Math.round(altitude / 100).toString().padStart(3, '0');
 	}
 
-	function getFacilityColor(facility) {
+	function getFacilityColor(facility: any) {
 		let bgColor, textColor;
 		switch (facility) {
 			case 1: // Flight Service Station
@@ -415,7 +432,7 @@
 	}
 
 
-	function getFacilityLetter(facility) {
+	function getFacilityLetter(facility: any) {
 		switch (facility) {
 			case 0:
 				return 'O'; // Observer
