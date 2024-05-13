@@ -4,7 +4,8 @@
 	import PlaneIcon from '$lib/map/plane.svg?raw';
 	import { browser } from '$app/environment';
 	import * as turf from '@turf/turf';
-	import { airports, boundaries, controllers, pilots, ui } from '$lib/stores';
+	import { airports, boundaries, controllers, pilots } from '$lib/stores';
+	import {ui} from '$lib/stores/ui';
 	import type { Controller } from '../../types';
 
 	/**

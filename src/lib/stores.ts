@@ -10,12 +10,3 @@ export const controllers = writable<Controller[]>([]);
 export const airports = writable<Airport[]>(airportData);
 
 export const boundaries = writable<any>(null);
-
-export const ui = writable({
-	showLayers: {
-		airports: true,
-		boundaries: true,
-		controllers: true,
-		pilots: true
-	}
-});
