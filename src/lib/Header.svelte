@@ -9,12 +9,12 @@
 		</a>
 		<div class="flex items-center">
 			<div class="mr-4">
-                <span class="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded">
+                <span class="bg-orange-300 text-orange-900 text-sm font-semibold px-4 py-2 rounded">
                     Controllers: <span id="controller-count">{$controllers.length}</span>
                 </span>
 			</div>
 			<div>
-                <span class="bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded">
+                <span class="bg-purple-400 text-purple-900 text-sm font-semibold px-4 py-2 rounded">
                     Pilots: <span id="pilot-count">{$pilots.length}</span>
                 </span>
 			</div>
