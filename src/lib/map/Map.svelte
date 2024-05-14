@@ -145,8 +145,10 @@
 		updateMap();
 	});
 
+	let lastPilotZoomedTo: number|null = null;
 	activePilot.subscribe((ap) => {
-		if (ap) {
+		if (ap && ap.cid !== lastPilotZoomedTo) {
+			lastPilotZoomedTo = ap.cid;
 			zoomAndCenterMap(ap.latitude, ap.longitude);
 		}
 	});
