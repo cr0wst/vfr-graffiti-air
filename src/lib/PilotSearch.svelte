@@ -55,7 +55,7 @@
 
 	{#if showDropdown && filteredPilots.length}
 		<div
-			class="absolute w-full mt-1 bg-zinc-800 shadow-lg max-h-60 overflow-auto rounded-md border border-purple-300 z-10">
+			class="absolute w-full mt-1 bg-zinc-800 shadow-lg max-h-60 overflow-auto rounded-md border border-purple-300 z-50">
 			{#each filteredPilots as pilot}
 				<div class="p-4 hover:bg-zinc-700 cursor-pointer border-b border-b-zinc-700"
 						 on:click={(event) => selectPilot(pilot.cid, event)}>
