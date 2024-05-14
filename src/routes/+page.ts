@@ -5,13 +5,18 @@ let boundariesLoaded = false;
 
 export const load: PageLoad = async ({ fetch, depends }: PageLoadEvent) => {
 	depends('app:loadData');
-	// Load boundaries only once
-	if (!boundariesLoaded) {
-		boundaries.set(await fetchBoundaries(fetch));
-		boundariesLoaded = true;
+	try {
+		// Load boundaries only once
+		if (!boundariesLoaded) {
+			boundaries.set(await fetchBoundaries(fetch));
+			boundariesLoaded = true;
+		}
+		pilots.set(await fetchPilots(fetch));
+		controllers.set(await fetchControllers(fetch));
+	} catch (err) {
+		console.log('Error loading data');
+		console.error(err);
 	}
-	pilots.set(await fetchPilots(fetch));
-	controllers.set(await fetchControllers(fetch));
 };
 
 async function fetchBoundaries(fetch: typeof window.fetch) {
