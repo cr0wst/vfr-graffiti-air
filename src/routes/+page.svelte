@@ -14,7 +14,7 @@
 	});
 </script>
 
-<div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-10">
+<div class="absolute bottom-20 md:bottom-10 left-1/2 transform -translate-x-1/2 z-10">
 	<LayerToggle/>
 </div>
 
@@ -24,7 +24,7 @@
 	</div>
 
 {#if $activePilot}
-	<div class="absolute right-10 top-1/3 transform -translate-y-1/3 z-10 w-1/3">
+	<div class="absolute left-1/2 transform -translate-x-1/2 z-10 top-1/4 -translate-y-1/4 md:right-10 md:top-1/3 md:-translate-y-1/3 w-10/12">
 		<PilotInfo pilot={$activePilot}/>
 	</div>
 {/if}

@@ -16,21 +16,21 @@
 </script>
 
 {#if pilot}
-	<div class="pilot-info-container bg-zinc-800 text-purple-200 rounded-lg shadow-lg p-4 m-4 absolute top-0 right-0 z-20">
-		<div class="flex items-center mb-2">
-			<div class="w-6 h-6 mr-2 svg-icon">
+	<div class="pilot-info-container bg-zinc-800 text-purple-200 rounded-lg shadow-lg md:p-4 md:m-4 p-2 md:absolute md:top-0 md:right-0 z-20 w-full md:w-fit">
+		<div class="flex items-center md:mb-2">
+			<div class="md:w-6 md:h-6 md:mr-2 w-3 h-3 mr-3 svg-icon">
 				{@html PlaneIcon} <!-- Raw SVG is injected here -->
 			</div>
-			<a href="https://stats.vatsim.net/connection/details/{pilot.cid}/{pilot.callsign}" target="_blank" class="text-xl font-bold text-purple-300">
+			<a href="https://stats.vatsim.net/connection/details/{pilot.cid}/{pilot.callsign}" target="_blank" class="text-lg md:text-xl font-bold text-purple-300">
 				{pilot.callsign}
 			</a>
 		</div>
-		<p class="text-purple-200 text-sm">{pilot.name}</p>
-		<div class="grid grid-cols-2 gap-2 text-sm border-t border-purple-300 pt-2">
-			<div class="border-b border-purple-300 pb-2">
+		<p class="text-purple-200 text-xs md:text-sm">{pilot.name}</p>
+		<div class="grid grid-cols-2 md:gap-2 gap-1 text-sm border-t border-purple-300 md:pt-2 pt-1">
+			<div class="border-b border-purple-300 pb-1 hidden md:block md:pb-2">
 				<strong>Server:</strong> <span class="text-purple-100">{pilot.server}</span>
 			</div>
-			<div class="border-b border-purple-300 pb-2">
+			<div class="border-b border-purple-300 pb-1 md:pb-2 hidden md:block">
 				<strong>Logon Time:</strong> <span class="text-purple-100">{displayTime(pilot.logon_time)}</span>
 			</div>
 			<div>
@@ -48,7 +48,10 @@
 			<div>
 				<strong>Heading:</strong> <span class="text-purple-100">{pilot.heading}°</span>
 			</div>
-			<div class="col-span-2 border-t border-purple-300 pt-2">
+			<div>
+				<strong>Transponder:</strong> <span class="text-purple-100">{pilot.transponder}</span>
+			</div>
+			<div class="col-span-2 border-t border-purple-300 hidden md:block pt-2">
 				<strong>Flight Plan:</strong> <span class="text-purple-100">{pilot.flight_plan ? 'Yes' : 'No'}</span>
 				{#if pilot.flight_plan}
 					<div>
