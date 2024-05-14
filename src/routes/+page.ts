@@ -1,10 +1,15 @@
 import type { PageLoad, PageLoadEvent } from './$types';
 import { boundaries, controllers, pilots } from '$lib/stores';
 
-export const load: PageLoad = async ({ fetch, depends }: PageLoadEvent) => {
-	boundaries.set(await fetchBoundaries(fetch));
+let boundariesLoaded = false;
 
+export const load: PageLoad = async ({ fetch, depends }: PageLoadEvent) => {
 	depends('app:loadData');
+	// Load boundaries only once
+	if (!boundariesLoaded) {
+		boundaries.set(await fetchBoundaries(fetch));
+		boundariesLoaded = true;
+	}
 	pilots.set(await fetchPilots(fetch));
 	controllers.set(await fetchControllers(fetch));
 };

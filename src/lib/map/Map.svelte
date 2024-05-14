@@ -4,7 +4,7 @@
 	import PlaneIcon from '$lib/map/plane.svg?raw';
 	import { browser } from '$app/environment';
 	import * as turf from '@turf/turf';
-	import { activePilot, airports, boundaries, controllers, pilots } from '$lib/stores';
+	import { activePilot, activePilotId, airports, boundaries, controllers, pilots } from '$lib/stores';
 	import { ui } from '$lib/stores/ui';
 	import type { Controller } from '../../types';
 
@@ -114,12 +114,12 @@
 
 			map.on('zoomend', function() {
 				mapZoomLevel = map.getZoom();
-				updatePilotLayer(); // Recreate pilot markers with new icon sizes
+				updateMap(); // Recreate pilot markers with new icon sizes
 			});
 
 			map.on('click', function() {
-				$activePilot = null;
-				updatePilotLayer();
+				$activePilotId = null;
+				updateMap();
 			});
 
 			leaflet
@@ -143,6 +143,12 @@
 
 	pilots.subscribe(() => {
 		updateMap();
+	});
+
+	activePilot.subscribe((ap) => {
+		if (ap) {
+			zoomAndCenterMap(ap.latitude, ap.longitude);
+		}
 	});
 
 	onDestroy(async () => {
@@ -246,11 +252,6 @@
 		updateMap();
 	});
 
-
-	activePilot.subscribe(() => {
-		updateMap();
-	});
-
 	function updateControllerLayer() {
 		if (mapLayers.controllerLayer) {
 			mapLayers.controllerLayer.forEach((cl: any) => map.removeLayer(cl));
@@ -315,13 +316,13 @@
 			const iconSize = calculateIconSize();
 
 			mapLayers.pilotLayer = $pilots.map((f) => {
-				const color = '#a96aad';
+				const color = ($activePilotId && $activePilotId == f.cid) ? '#b330e5' : '#b575b9';
 
 				// add some transparency if the plane is not selected
 				const marker = leaflet
 					.marker([f.latitude, f.longitude], {
 						icon: leaflet.divIcon({
-							html: `<div class="plane-icon hover:pointer" style="--fill-color: ${color}">${PlaneIcon}</div>`,
+							html: `<div class="plane-icon hover:pointer ${ $activePilot && $activePilot.cid === f.cid ? 'active' : ''}" style="--fill-color: ${color}">${PlaneIcon}</div>`,
 							iconSize: [iconSize, iconSize],
 							iconAnchor: [iconSize / 2, iconSize / 2],
 							className: ''
@@ -362,12 +363,12 @@
 						marker.openPopup();
 					})
 					.on('mouseout', function() {
-							marker.closePopup();
+						marker.closePopup();
 					})
 					.on('click', (e: any) => {
-						$activePilot = f;
+						$activePilotId = f.cid;
 						zoomAndCenterMap(f.latitude, f.longitude);
-						e.originalEvent.preventDefault()
+						e.originalEvent.preventDefault();
 					})
 					.addTo(map);
 
@@ -384,7 +385,7 @@
 							[f.latitude, f.longitude],
 							[arrival.lat, arrival.lon]
 						], {
-							color: '#f59e0b',
+							color: '#b330e5',
 							weight: 2,
 							opacity: 1
 						}).addTo(map);
@@ -511,7 +512,7 @@
 	 * Function to zoom into and center the map on a pilot's coordinates
 	 */
 	function zoomAndCenterMap(latitude: number, longitude: number) {
-		const newZoomLevel = Math.max(5, map.getZoom()); // Increase current zoom by 2 levels
+		const newZoomLevel = Math.max(6, map.getZoom()); // Increase current zoom by 2 levels
 		map.setView([latitude, longitude], newZoomLevel, {
 			animate: true,
 			pan: {

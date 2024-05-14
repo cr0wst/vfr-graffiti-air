@@ -11,4 +11,8 @@ export const airports = writable<Airport[]>(airportData);
 
 export const boundaries = writable<any>(null);
 
-export const activePilot = writable<Pilot | null>(null);
+export const activePilotId = writable<number | null>(null);
+
+export const activePilot = derived([pilots, activePilotId], ([$pilots, $activePilotId]) =>
+	$pilots.find((pilot) => pilot.cid === $activePilotId)
+);
