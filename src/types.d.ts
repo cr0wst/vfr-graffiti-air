@@ -71,3 +71,8 @@ export type Airport = {
 	lon: number;
 	tz: string;
 };
+
+export type Metar = {
+	id: string;
+	metar: string;
+};

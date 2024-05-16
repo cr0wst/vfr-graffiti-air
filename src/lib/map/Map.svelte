@@ -4,7 +4,7 @@
 	import PlaneIcon from '$lib/map/plane.svg?raw';
 	import { browser } from '$app/environment';
 	import * as turf from '@turf/turf';
-	import { activePilot, activePilotId, airports, boundaries, controllers, pilots } from '$lib/stores';
+	import { activePilot, activePilotId, airports, boundaries, controllers, metars, pilots } from '$lib/stores';
 	import { ui } from '$lib/stores/ui';
 	import type { Controller } from '../../types';
 
@@ -14,7 +14,8 @@
 	let activeAirports = $airports.map((a) => {
 		const arrivals = $pilots.filter((p) => p.flight_plan?.arrival === a.icao);
 		const departures = $pilots.filter((p) => p.flight_plan?.departure === a.icao);
-		return { ...a, arrivals, departures };
+		const metar = $metars.find((m) => m.id === a.icao);
+		return { ...a, arrivals, departures, metar };
 	}).filter((a) => a.arrivals.length > 0 || a.departures.length > 0);
 
 	/**
@@ -80,9 +81,14 @@
 			bestCenter = turf.center(turf.featureCollection(cluster.map((c: any) => turf.point(c.center.coordinates)))).geometry;
 		}
 
+		// Lookup the METAR for the controller group. Use the first part of the callsign and check for an exact match against the m.id
+		// or a match against everything except the first character in the callsign
+		const metar = $metars.find((m) => m.id === cluster[0].controller.callsign.split('_')[0] || m.id.slice(1) === cluster[0].controller.callsign.split('_')[0]);
+
 		return {
 			controllers: cluster.map((c: any) => c.controller),
-			center: bestCenter
+			center: bestCenter,
+			metar: metar
 		};
 	});
 
@@ -92,7 +98,7 @@
 		controllerLayer: [] as any[],
 		pilotLayer: [] as any[],
 		geoJsonLayer: [] as any[],
-		polylineLayer: [] as any[]
+		polylineLayer: [] as any[],
 	};
 	let mapElement: any;
 	let map: any;
@@ -293,6 +299,9 @@
 				}).bindPopup(`
 			    <div class="text-xs p-2 bg-zinc-900 bg-opacity-50 border border-purple-300">
         ${popupContent}
+        <div class="flex flex-col items-center justify-between w-full">
+        		<div class="text-xs text-purple-100 w-full font-semibold">METAR</div>
+						<div class="${getMetarVisibility(group.metar?.metar)}">${group.metar ? group.metar.metar : 'N/A'}</div>
     </div>
 			`, { autoPan: false }).on('mouseover', function() {
 					marker.openPopup();
@@ -429,6 +438,7 @@
                 <div class="text-purple-100">Arrivals: ${a.arrivals.length}</div>
                 <div class="text-purple-100">Departures: ${a.departures.length}</div>
             </div>
+            <div class="${getMetarVisibility(a.metar?.metar)}">METAR: ${a.metar ? a.metar.metar : 'N/A'}</div>
         </div>
     </div>`, { autoPan: false })
 					.on('mouseover', function() {
@@ -524,11 +534,37 @@
 		updateMap();
 	}
 
+	function getMetarVisibility(metarText: string|undefined) {
+		if (!metarText) return '';
+		// Regular expression to extract visibility and ceiling information
+		const visibilityRegex = /\b(\d{1,2})SM\b/;
+		const ceilingRegex = /\b(BKN|OVC|VV)(\d{3})\b/;
+
+		const visibilityMatch = metarText.match(visibilityRegex);
+		const ceilingMatch = metarText.match(ceilingRegex);
+
+		// Default visibility in miles if not specified
+		let visibility = visibilityMatch ? parseInt(visibilityMatch[1], 10) : 10;
+		// Default ceiling in hundreds of feet, high value if not specified
+		let ceiling = ceilingMatch ? parseInt(ceilingMatch[2], 10) * 100 : 10000;
+
+		// Determine flight category based on visibility and ceiling
+		if (visibility >= 5 && ceiling >= 3000) {
+			return 'vfr'; // VFR
+		} else if (visibility >= 3 && ceiling >= 1000) {
+			return 'mvfr'; // MVFR
+		} else if (visibility >= 1 && ceiling >= 500) {
+			return 'ifr'; // IFR
+		} else {
+			return 'lifr'; // LIFR
+		}
+	}
+
 </script>
 
 <div bind:this={mapElement} id="map"></div>
 
-<style>
+<style lang="postcss">
     #map {
         flex: 1;
     }
@@ -560,4 +596,20 @@
     :global(.leaflet-popup-tip-container, .leaflet-popup-close-button) {
         display: none !important;
     }
+
+		:global(.vfr) {
+				@apply text-green-500;
+		}
+
+		:global(.mvfr) {
+				@apply text-blue-500;
+		}
+
+		:global(.ifr) {
+				@apply text-red-500;
+		}
+
+		:global(.lifr) {
+				@apply text-purple-500;
+		}
 </style>

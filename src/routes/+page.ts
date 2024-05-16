@@ -1,5 +1,5 @@
 import type { PageLoad, PageLoadEvent } from './$types';
-import { boundaries, controllers, pilots } from '$lib/stores';
+import { boundaries, controllers, metars, pilots } from '$lib/stores';
 
 let boundariesLoaded = false;
 
@@ -13,6 +13,7 @@ export const load: PageLoad = async ({ fetch, depends }: PageLoadEvent) => {
 		}
 		pilots.set(await fetchPilots(fetch));
 		controllers.set(await fetchControllers(fetch));
+		metars.set(await fetchMetars(fetch));
 	} catch (err) {
 		console.log('Error loading data');
 		console.error(err);
@@ -33,4 +34,8 @@ async function fetchPilots(fetch: typeof window.fetch) {
 
 async function fetchControllers(fetch: typeof window.fetch) {
 	return fetch('/api/controllers').then((r) => r.json());
+}
+
+async function fetchMetars(fetch: typeof window.fetch) {
+	return fetch('/api/metars').then((r) => r.json());
 }
