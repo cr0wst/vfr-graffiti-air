@@ -8,7 +8,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			{ transponder: '1200', flight_plan: null },
 			{ transponder: '7000', flight_plan: null },
 			{ 'flight_plan.flight_rules': 'V' },
-			{ altitude: /VFR/i },
+			{ altitude: { $regex: /VFR/i } },
 			{ 'flight_plan.remarks': { $regex: /VFR/i } },
 			{ 'flight_plan.route': { $regex: /VFR/i } }
 		]
