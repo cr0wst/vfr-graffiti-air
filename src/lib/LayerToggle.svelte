@@ -1,7 +1,8 @@
 <script lang="ts">
 
 	// Function to toggle layer visibility
-	import {ui} from '$lib/stores/ui';
+	import { ui } from '$lib/stores/ui';
+	import { invalidate } from '$app/navigation';
 
 	function toggleLayer(layer: keyof typeof $ui.showLayers) {
 
@@ -17,7 +18,7 @@
 						aria-pressed={visible}
 						on:click={() => toggleLayer(layer)}>
             <span class="text-xs font-medium transition-opacity duration-300 group-hover:text-zinc-300"
-						class:visible-layer-button={visible}>
+									class:visible-layer-button={visible}>
                 {layer[0].toUpperCase() + layer.slice(1)}
             </span>
 		</button>
@@ -25,7 +26,7 @@
 </div>
 
 <style lang="postcss">
-	.visible-layer-button {
-			@apply text-zinc-100;
-	}
+    .visible-layer-button {
+        @apply text-zinc-100;
+    }
 </style>

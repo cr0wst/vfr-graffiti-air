@@ -1,5 +1,6 @@
 import type { PageLoad, PageLoadEvent } from './$types';
 import { boundaries, controllers, metars, pilots } from '$lib/stores';
+import { ui } from '$lib/stores/ui';
 
 let boundariesLoaded = false;
 
@@ -29,7 +30,13 @@ async function fetchBoundaries(fetch: typeof window.fetch) {
 }
 
 async function fetchPilots(fetch: typeof window.fetch) {
-	return fetch('/api/pilots').then((r) => r.json());
+	let showAllPilots = false;
+	let uiStoreUnsubscriber = ui.subscribe((value) => {
+		showAllPilots = value.showAllPilots;
+	});
+	// Unsubscribe to the ui
+	uiStoreUnsubscriber();
+	return fetch(`/api/pilots?showAllPilots=${showAllPilots}`).then((r) => r.json());
 }
 
 async function fetchControllers(fetch: typeof window.fetch) {

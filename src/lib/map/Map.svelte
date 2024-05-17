@@ -168,7 +168,6 @@
 	function updateMap() {
 		if (leaflet && map) {
 			updateControllerLayer();
-			updateAirportLayer();
 			updateGeoJsonLayer();
 			updatePilotLayer();
 		}
@@ -400,55 +399,82 @@
 							weight: 2,
 							opacity: 1
 						}).addTo(map);
-						mapLayers.polylineLayer.push(line);
+						// Add a purple dot at each end with the airport ICAO code label
+						const departureMarker = leaflet
+							.marker([departure.lat, departure.lon], {
+								icon: leaflet.divIcon({
+									html: `<div class="airport-label">${departure.icao}</div>`,
+									iconSize: [100, 40],
+									iconAnchor: [50, 20],
+									className: ''
+								}),
+								interactive: false,
+								opacity: 1
+							})
+							.addTo(map);
+						const arrivalMarker = leaflet
+							.marker([arrival.lat, arrival.lon], {
+								icon: leaflet.divIcon({
+									html: `<div class="airport-label">${arrival.icao}</div>`,
+									iconSize: [100, 40],
+									iconAnchor: [50, 20],
+									className: ''
+								}),
+								interactive: false,
+								opacity: 1
+							})
+							.addTo(map);
+
+						mapLayers.polylineLayer.push(line, departureMarker, arrivalMarker);
+
+					} else if (departure) {
+						const line = leaflet.polyline([
+							[departure.lat, departure.lon],
+							[f.latitude, f.longitude]
+						], {
+							color: '#b330e5',
+							weight: 2,
+							opacity: 1
+						}).addTo(map);
+						// Add a purple dot at each end with the airport ICAO code label
+						const departureMarker = leaflet
+							.marker([departure.lat, departure.lon], {
+								icon: leaflet.divIcon({
+									html: `<div class="airport-label">${departure.icao}</div>`,
+									iconSize: [100, 40],
+									iconAnchor: [50, 20],
+									className: ''
+								}),
+								interactive: false,
+								opacity: 1
+							})
+							.addTo(map);
+						mapLayers.polylineLayer.push(line, departureMarker);
+					} else if (arrival) {
+						const line = leaflet.polyline([
+							[f.latitude, f.longitude],
+							[arrival.lat, arrival.lon]
+						], {
+							color: '#b330e5',
+							weight: 2,
+							opacity: 1
+						}).addTo(map);
+						// Add a purple dot at each end with the airport ICAO code label
+						const arrivalMarker = leaflet
+							.marker([arrival.lat, arrival.lon], {
+								icon: leaflet.divIcon({
+									html: `<div class="airport-label">${arrival.icao}</div>`,
+									iconSize: [100, 40],
+									iconAnchor: [50, 20],
+									className: ''
+								}),
+								interactive: false,
+								opacity: 1
+							})
+							.addTo(map);
+						mapLayers.polylineLayer.push(line, arrivalMarker);
 					}
 				}
-				return marker;
-			});
-		}
-	}
-
-	function updateAirportLayer() {
-		if (mapLayers.airportLayer) {
-			mapLayers.airportLayer.forEach((al) => map.removeLayer(al));
-		}
-
-		if ($ui.showLayers.airports) {
-			mapLayers.airportLayer = activeAirports.map((a) => {
-				const color = '#ffffff';
-
-				// add some transparency if the plane is not selected
-				const marker = leaflet
-					.marker([a.lat, a.lon], {
-						icon: leaflet.divIcon({
-							html: `<div class="bg-orange-300 w-2 h-2 rounded-sm"></div>`, // Using Tailwind to make the icon smaller
-							iconSize: [8, 8], // These pixel values correspond to Tailwind's w-3 and h-3 which are 12px
-							iconAnchor: [4, 4], // Center the anchor for the smaller icon
-							className: ''
-						}),
-						rotationOrigin: 'center',
-						interactive: true,
-						opacity: 1
-					})
-					.bindPopup(`<div class="text-xs p-2 bg-zinc-900 bg-opacity-75 border border-purple-300 rounded-lg shadow-md">
-        <div class="flex flex-col space-y-1 py-1 min-w-48 max-w-64">
-            <div class="font-semibold text-purple-400">${a.name}</div>
-            <div class="text-purple-200">${a.state}</div>  <!-- State displayed below the name -->
-            <div class="flex items-center justify-between">
-                <div class="text-purple-100">Arrivals: ${a.arrivals.length}</div>
-                <div class="text-purple-100">Departures: ${a.departures.length}</div>
-            </div>
-            <div class="${getMetarVisibility(a.metar?.metar)}">METAR: ${a.metar ? a.metar.metar : 'N/A'}</div>
-        </div>
-    </div>`, { autoPan: false })
-					.on('mouseover', function() {
-						marker.openPopup();
-					})
-					.on('mouseout', function() {
-						marker.closePopup();
-					})
-					.addTo(map);
-
 				return marker;
 			});
 		}
@@ -611,5 +637,9 @@
 
 		:global(.lifr) {
 				@apply text-purple-500;
+		}
+
+		:global(.airport-label) {
+				@apply text-purple-300 bg-purple-600 rounded-md w-fit py-0.5 px-2;
 		}
 </style>

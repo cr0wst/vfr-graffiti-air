@@ -51,14 +51,6 @@
 			<div>
 				<strong>Transponder:</strong> <span class="text-purple-100">{pilot.transponder}</span>
 			</div>
-			<div class="col-span-2 border-t border-purple-300 hidden md:block pt-2">
-				<strong>Flight Plan:</strong> <span class="text-purple-100">{pilot.flight_plan ? 'Yes' : 'No'}</span>
-				{#if pilot.flight_plan}
-					<div>
-						<strong>Route:</strong> <a href={createSkyVectorLink(pilot.flight_plan.route)} target="_blank" class="text-purple-100 hover:text-purple-300">{pilot.flight_plan.route}</a>
-					</div>
-				{/if}
-			</div>
 		</div>
 	</div>
 {/if}
