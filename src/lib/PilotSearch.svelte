@@ -18,7 +18,6 @@
 		event.stopPropagation();  // Stop the event from propagating to the input's blur event
 		$activePilotId = cid;
 		$ui.showLayers.pilots = true;  // Show the pilots layer
-		$ui.showLayers.airports = true; // Show the airports layer
 		showDropdown = false;  // Close dropdown on selection
 		searchTerm = '';  // Clear search term upon selection
 	}

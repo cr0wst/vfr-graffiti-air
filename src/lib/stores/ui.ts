@@ -6,7 +6,19 @@ function persist(key: string, value: any) {
 		// Check if we're in the browser
 		if (typeof window !== 'undefined') {
 			const storedValue = localStorage.getItem(key);
-			return storedValue ? JSON.parse(storedValue) : value;
+			if (storedValue) {
+				const parsedValue = JSON.parse(storedValue);
+				return {
+					showLayers: {
+						boundaries: parsedValue.showLayers.boundaries,
+						controllers: parsedValue.showLayers.controllers,
+						pilots: parsedValue.showLayers.pilots
+					},
+					showAllPilots: parsedValue.showAllPilots
+				};
+			}
+
+			return value;
 		}
 		// Return the default value if not in the browser
 		return value;
@@ -26,7 +38,6 @@ function persist(key: string, value: any) {
 
 export const ui = persist('uiSettings', {
 	showLayers: {
-		airports: true,
 		boundaries: true,
 		controllers: true,
 		pilots: true
