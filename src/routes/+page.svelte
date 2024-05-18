@@ -21,7 +21,7 @@
 		try {
 			const [pilotResponse, controllerResponse] = await Promise.all([
 				fetch('/api/pilots'),
-				fetch('/api/controllers')
+				fetch('/api/controllers'),
 			]);
 
 			const [pilotData, controllerData] = await Promise.all([

@@ -4,7 +4,7 @@
 	import PlaneIcon from '$lib/map/plane.svg?raw';
 	import { browser } from '$app/environment';
 	import * as turf from '@turf/turf';
-	import { activePilot, activePilotId, boundaries, controllers, metars, pilots } from '$lib/stores';
+	import { activePilot, activePilotId, boundaries, controllers, pilots } from '$lib/stores';
 	import { ui } from '$lib/stores/ui';
 	import type { Controller } from '../../types';
 
@@ -125,15 +125,9 @@ let nonCenterControllerCenters: any[] = [];
 			} else {
 				bestCenter = turf.center(turf.featureCollection(cluster.map((c: any) => turf.point(c.center.coordinates)))).geometry;
 			}
-
-			// Lookup the METAR for the controller group. Use the first part of the callsign and check for an exact match against the m.id
-			// or a match against everything except the first character in the callsign
-			const metar = $metars.find((m) => m.id === cluster[0].controller.callsign.split('_')[0] || m.id.slice(1) === cluster[0].controller.callsign.split('_')[0]);
-
 			return {
 				controllers: cluster.map((c: any) => c.controller),
 				center: bestCenter,
-				metar: metar
 			};
 		});
 
@@ -305,10 +299,7 @@ let nonCenterControllerCenters: any[] = [];
 				}).bindPopup(`
 			    <div class="text-xs p-2 bg-zinc-900 bg-opacity-50 border border-purple-300">
         ${popupContent}
-        <div class="flex flex-col items-center justify-between w-full">
-        		<div class="text-xs text-purple-100 w-full font-semibold">METAR</div>
-						<div class="${getMetarVisibility(group.metar?.metar)}">${group.metar ? group.metar.metar : 'N/A'}</div>
-    </div>
+    			</div>
 			`, { autoPan: false }).on('mouseover', function() {
 					marker.openPopup();
 				}).on('mouseout', function() {
@@ -565,32 +556,6 @@ let nonCenterControllerCenters: any[] = [];
 			}
 		});
 		updateMap();
-	}
-
-	function getMetarVisibility(metarText: string|undefined) {
-		if (!metarText) return '';
-		// Regular expression to extract visibility and ceiling information
-		const visibilityRegex = /\b(\d{1,2})SM\b/;
-		const ceilingRegex = /\b(BKN|OVC|VV)(\d{3})\b/;
-
-		const visibilityMatch = metarText.match(visibilityRegex);
-		const ceilingMatch = metarText.match(ceilingRegex);
-
-		// Default visibility in miles if not specified
-		let visibility = visibilityMatch ? parseInt(visibilityMatch[1], 10) : 10;
-		// Default ceiling in hundreds of feet, high value if not specified
-		let ceiling = ceilingMatch ? parseInt(ceilingMatch[2], 10) * 100 : 10000;
-
-		// Determine flight category based on visibility and ceiling
-		if (visibility >= 5 && ceiling >= 3000) {
-			return 'vfr'; // VFR
-		} else if (visibility >= 3 && ceiling >= 1000) {
-			return 'mvfr'; // MVFR
-		} else if (visibility >= 1 && ceiling >= 500) {
-			return 'ifr'; // IFR
-		} else {
-			return 'lifr'; // LIFR
-		}
 	}
 
 </script>
