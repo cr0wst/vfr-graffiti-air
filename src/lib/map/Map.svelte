@@ -4,93 +4,24 @@
 	import PlaneIcon from '$lib/map/plane.svg?raw';
 	import { browser } from '$app/environment';
 	import * as turf from '@turf/turf';
-	import { activePilot, activePilotId, airports, boundaries, controllers, metars, pilots } from '$lib/stores';
+	import { activePilot, activePilotId, boundaries, controllers, metars, pilots } from '$lib/stores';
 	import { ui } from '$lib/stores/ui';
 	import type { Controller } from '../../types';
 
 	/**
-	 * Active airports are airports that have at least one arrival or departure
-	 */
-	let activeAirports = $airports.map((a) => {
-		const arrivals = $pilots.filter((p) => p.flight_plan?.arrival === a.icao);
-		const departures = $pilots.filter((p) => p.flight_plan?.departure === a.icao);
-		const metar = $metars.find((m) => m.id === a.icao);
-		return { ...a, arrivals, departures, metar };
-	}).filter((a) => a.arrivals.length > 0 || a.departures.length > 0);
-
-	/**
 	 * Center Controller Centers are the center of the transceivers for each center controller
 	 */
-	let centerControllerCenters = $controllers.filter((c) => c.facility == 6).map((c) => {
-		const transceivers = (c.transceivers || []).map((t) => {
-			return turf.point([t.lonDeg, t.latDeg]);
-		});
-		// Find the centroid of the transceivers turf points
-		if (transceivers.length !== 0) {
-			return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
-		}
-	}).filter((c) => c);
-	;
+let centerControllerCenters: any[] = [];
 
 	/**
 	 * Non Center Controller Centers are the center of the transceivers for each controller that is not a center controller
 	 */
-	let nonCenterControllerCenters = $controllers.filter((c) => c.facility !== 6).map((c) => {
-		const transceivers = (c.transceivers || []).map((t) => {
-			return turf.point([t.lonDeg, t.latDeg]);
-		});
-		// Find the centroid of the transceivers turf points
-		if (transceivers.length !== 0) {
-			return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
-		}
-	}).filter((c) => c);
-	;
+let nonCenterControllerCenters: any[] = [];
 
 	/**
 	 * Controller Groups are groups of controllers that share the same prefix in their callsign
 	 */
-	let controllerGroups = nonCenterControllerCenters.reduce((clusters: any[], current: any) => {
-		// Extract the prefix from the callsign up to the first underscore
-		const currentPrefix = current.controller.callsign.split('_')[0];
-
-		// Find a cluster that has a matching prefix
-		const foundCluster = clusters.find(cluster =>
-			cluster.some((member: any) => {
-				const memberPrefix = member.controller.callsign.split('_')[0];
-				return memberPrefix === currentPrefix;
-			})
-		);
-
-		if (foundCluster) {
-			foundCluster.push(current);
-		} else {
-			clusters.push([current]);
-		}
-		return clusters;
-	}, []).map(cluster => {
-		// Determine the best center point based on facility type priority
-		const preferredCenters = cluster.filter((c: any) => [2, 3, 4].includes(c.controller.facility)); // DEL, GND, TWR
-		const appCenters = cluster.filter((c: any) => c.controller.facility === 5); // APP
-
-		let bestCenter;
-		if (preferredCenters.length > 0) {
-			bestCenter = turf.center(turf.featureCollection(preferredCenters.map((c: any) => turf.point(c.center.coordinates)))).geometry;
-		} else if (appCenters.length > 0) {
-			bestCenter = turf.center(turf.featureCollection(appCenters.map((c: any) => turf.point(c.center.coordinates)))).geometry;
-		} else {
-			bestCenter = turf.center(turf.featureCollection(cluster.map((c: any) => turf.point(c.center.coordinates)))).geometry;
-		}
-
-		// Lookup the METAR for the controller group. Use the first part of the callsign and check for an exact match against the m.id
-		// or a match against everything except the first character in the callsign
-		const metar = $metars.find((m) => m.id === cluster[0].controller.callsign.split('_')[0] || m.id.slice(1) === cluster[0].controller.callsign.split('_')[0]);
-
-		return {
-			controllers: cluster.map((c: any) => c.controller),
-			center: bestCenter,
-			metar: metar
-		};
-	});
+	let controllerGroups: any[] = [];
 
 	// Mapping Layers
 	const mapLayers = {
@@ -148,6 +79,74 @@
 	});
 
 	pilots.subscribe(() => {
+		updateMap();
+	});
+
+	controllers.subscribe(() => {
+		nonCenterControllerCenters = $controllers.filter((c) => c.facility !== 6).map((c) => {
+			const transceivers = (c.transceivers || []).map((t) => {
+				return turf.point([t.lonDeg, t.latDeg]);
+			});
+			// Find the centroid of the transceivers turf points
+			if (transceivers.length !== 0) {
+				return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
+			}
+		}).filter((c) => c);
+
+
+		controllerGroups = nonCenterControllerCenters.reduce((clusters: any[], current: any) => {
+			// Extract the prefix from the callsign up to the first underscore
+			const currentPrefix = current.controller.callsign.split('_')[0];
+
+			// Find a cluster that has a matching prefix
+			const foundCluster = clusters.find(cluster =>
+				cluster.some((member: any) => {
+					const memberPrefix = member.controller.callsign.split('_')[0];
+					return memberPrefix === currentPrefix;
+				})
+			);
+
+			if (foundCluster) {
+				foundCluster.push(current);
+			} else {
+				clusters.push([current]);
+			}
+			return clusters;
+		}, []).map(cluster => {
+			// Determine the best center point based on facility type priority
+			const preferredCenters = cluster.filter((c: any) => [2, 3, 4].includes(c.controller.facility)); // DEL, GND, TWR
+			const appCenters = cluster.filter((c: any) => c.controller.facility === 5); // APP
+
+			let bestCenter;
+			if (preferredCenters.length > 0) {
+				bestCenter = turf.center(turf.featureCollection(preferredCenters.map((c: any) => turf.point(c.center.coordinates)))).geometry;
+			} else if (appCenters.length > 0) {
+				bestCenter = turf.center(turf.featureCollection(appCenters.map((c: any) => turf.point(c.center.coordinates)))).geometry;
+			} else {
+				bestCenter = turf.center(turf.featureCollection(cluster.map((c: any) => turf.point(c.center.coordinates)))).geometry;
+			}
+
+			// Lookup the METAR for the controller group. Use the first part of the callsign and check for an exact match against the m.id
+			// or a match against everything except the first character in the callsign
+			const metar = $metars.find((m) => m.id === cluster[0].controller.callsign.split('_')[0] || m.id.slice(1) === cluster[0].controller.callsign.split('_')[0]);
+
+			return {
+				controllers: cluster.map((c: any) => c.controller),
+				center: bestCenter,
+				metar: metar
+			};
+		});
+
+		centerControllerCenters = $controllers.filter((c) => c.facility == 6).map((c) => {
+			const transceivers = (c.transceivers || []).map((t) => {
+				return turf.point([t.lonDeg, t.latDeg]);
+			});
+			// Find the centroid of the transceivers turf points
+			if (transceivers.length !== 0) {
+				return { controller: c, center: turf.centroid(turf.featureCollection(transceivers)).geometry };  // Ensure only geometry is returned
+			}
+		}).filter((c) => c);
+
 		updateMap();
 	});
 
@@ -265,13 +264,21 @@
 		}
 		if ($ui.showLayers.controllers) {
 			mapLayers.controllerLayer = controllerGroups.flatMap(group => {
+				const seenFacilities: number[] = [];
 				// Create a div to hold all markers in the group, using flexbox for horizontal layout
-				const groupHtml = group.controllers.sort((a: Controller, b: Controller) => a.facility - b.facility).map((controller: Controller) => `
+				// Only show the unique facilities in the group, sorted by facility level
+				const groupHtml = group.controllers.sort((a: Controller, b: Controller) => a.facility - b.facility).map((controller: Controller) => {
+					if (!seenFacilities.includes(controller.facility)) {
+						seenFacilities.push(controller.facility);
+					} else {
+						return '';
+					}
+					return `
         <div class="hover:pointer w-3 h-3 flex items-center justify-center text-[.65rem] font-bold rounded-none"
             style="background-color: ${getFacilityColor(controller.facility).bgColor}; color:${getFacilityColor(controller.facility).textColor}">
             ${getFacilityLetter(controller.facility)}
         </div>
-    `).join('');
+    `}).join('');
 
 				const popupContent = group.controllers.map((controller: Controller) => `
     <div class="flex flex-col space-y-1 py-1 min-w-48 max-w-64">
@@ -386,8 +393,8 @@
 				// in orange to indicate the path. This is only drawn if the pilot has a flight plan.
 				if ($activePilot && $activePilot.cid === f.cid && f.flight_plan) {
 					// Clear the polyline layer
-					const departure = $airports.find((a) => a.icao === f.flight_plan.departure);
-					const arrival = $airports.find((a) => a.icao === f.flight_plan.arrival);
+					const departure = $activePilot.departure_airport;
+					const arrival = $activePilot.arrival_airport;
 
 					if (departure && arrival) {
 						const line = leaflet.polyline([

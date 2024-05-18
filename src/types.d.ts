@@ -31,6 +31,8 @@ export type Pilot = {
 		revision_id: number;
 		assigned_transponder: string;
 	};
+	departure_airport: Airport | undefined;
+	arrival_airport: Airport | undefined;
 	logon_time: string;
 	last_updated: string;
 };
@@ -57,6 +59,7 @@ export type Controller = {
 		latDeg: number;
 		lonDeg: number;
 	}[];
+	airport: Airport | undefined;
 };
 
 export type Airport = {
