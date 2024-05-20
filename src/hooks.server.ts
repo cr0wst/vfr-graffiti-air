@@ -6,7 +6,7 @@ import { env } from '$env/dynamic/private';
 export const handle: Handle = async ({ event, resolve }) => {
 	const mongoClient = await MongoClient.connect(env.MONGO_URL);
 
-	event.locals.db = mongoClient.db('vatsim-cache');
+	event.locals.db = mongoClient.db('vatsim-data');
 
 	const response = await resolve(event);
 
