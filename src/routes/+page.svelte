@@ -5,15 +5,11 @@
 	import LayerToggle from '$lib/LayerToggle.svelte';
 	import PilotInfo from '$lib/PilotInfo.svelte';
 	import { writable } from 'svelte/store';
-	import { showAllPilots, ui } from '$lib/stores/ui';
 
 	const loading = writable(true);
 
 	onMount(() => {
 		loadData();
-		showAllPilots.subscribe(() => {
-			loadData();
-		});
 		const interval = setInterval(() => {
 			if ($loading === false){
 				loadData();
@@ -26,7 +22,7 @@
 	async function loadData() {
 		try {
 			const [pilotResponse, controllerResponse] = await Promise.all([
-				fetch(`/api/pilots?showAllPilots=${$showAllPilots}`),
+				fetch(`/api/pilots`),
 				fetch('/api/controllers'),
 			]);
 

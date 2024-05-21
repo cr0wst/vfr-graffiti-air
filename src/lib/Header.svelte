@@ -8,20 +8,9 @@
 	<div class="flex flex-grow md:flex-row flex-col md:justify-between md:items-center">
 		<div class="flex items-center justify-between md:w-1/2">
 			<div class="w-3/4 md:w-1/2 flex md:items-center md:justify-center">
-				<a href="/" class="pb-1 md:pb-0 text-2xl md:text-4xl mr-4">
-					<span class="text-white cursive">VATSIM Traffic</span>
+				<a href="/" class="pb-1 md:pb-0 text-2xl md:text-3xl mr-4">
+					<span class="text-white cursive">VATSIM VFR Traffic</span>
 				</a>
-				<div
-					class="bg-purple-700 bg-opacity-90 shadow-xl px-4 py-2 rounded-lg flex items-center justify-between text-zinc-500">
-					<button class="mx-2 group"
-									class:visible-layer-button={!$showAllPilots}
-									on:click={() => $showAllPilots = !$showAllPilots}>
-            <span class="text-sm font-medium transition-opacity duration-300 group-hover:text-zinc-300"
-						>
-  VFR
-            </span>
-					</button>
-				</div>
 			</div>
 		</div>
 		<div class="flex-1 md:max-w-lg w-full">
