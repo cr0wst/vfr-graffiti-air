@@ -41,6 +41,7 @@ export const ui = persist('uiSettings', {
 		boundaries: true,
 		controllers: true,
 		pilots: true
-	},
-	showAllPilots: false
+	}
 });
+
+export const showAllPilots = writable(false);

@@ -3,8 +3,8 @@
 	import Header from '$lib/Header.svelte';
 </script>
 
+<Header />
 <div class="min-h-screen flex flex-col">
-	<Header />
 	<slot />
 	<div
 		class="w-full bg-zinc-900 flex flex-col items-center justify-center p-2 text-xs font-thin text-zinc-400"

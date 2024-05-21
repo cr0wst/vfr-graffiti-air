@@ -1,24 +1,26 @@
 <script>
-	import { controllers, pilots } from '$lib/stores';
 	import PilotSearch from '$lib/PilotSearch.svelte';
+	import { showAllPilots } from './stores/ui';
+
 </script>
 
-<nav class="container mx-auto px-6 py-3 w-full">
+<nav class="container mx-auto px-6 py-2 w-full absolute top-0 left-0 right-0 z-50">
 	<div class="flex flex-grow md:flex-row flex-col md:justify-between md:items-center">
-		<div class="flex items-center justify-between my-2 md:w-1/2">
-			<div class="w-3/4 md:w-1/2">
-			<a href="/" class="text-lg md:text-2xl mr-4">
-				<span class="font-extralight logo-text text-white text-md">VATSIM VFR Tracker</span>
-			</a>
-			</div>
-			<div class="flex space-x-2 justify-end flex-grow md:w-1/2">
+		<div class="flex items-center justify-between md:w-1/2">
+			<div class="w-3/4 md:w-1/2 flex md:items-center md:justify-center">
+				<a href="/" class="pb-1 md:pb-0 text-2xl md:text-4xl mr-4">
+					<span class="text-white cursive">VATSIM Traffic</span>
+				</a>
 				<div
-					class="bg-orange-400 text-orange-900 text-xs md:text-sm font-semibold p-1 md:w-full md:px-4 md:py-2 rounded">
-					<span class="hidden md:inline">Controllers: </span> {$controllers.length}
-				</div>
-				<div
-					class="bg-purple-400 text-purple-900 text-xs md:text-sm font-semibold p-1 md:px-4 md:w-full md:py-2 rounded">
-					<span class="hidden md:inline">Pilots: </span> {$pilots.length}
+					class="bg-purple-700 bg-opacity-90 shadow-xl px-4 py-2 rounded-lg flex items-center justify-between text-zinc-500">
+					<button class="mx-2 group"
+									class:visible-layer-button={!$showAllPilots}
+									on:click={() => $showAllPilots = !$showAllPilots}>
+            <span class="text-sm font-medium transition-opacity duration-300 group-hover:text-zinc-300"
+						>
+  VFR
+            </span>
+					</button>
 				</div>
 			</div>
 		</div>
@@ -28,23 +30,15 @@
 	</div>
 </nav>
 
-<style>
+<style lang="postcss">
     @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap');
 
-    .logo-text {
-        background: linear-gradient(
-                240deg,
-                rgb(48, 181, 64) 20%,
-                rgb(214, 0, 14) 30%,
-                rgb(133, 2, 221) 50%,
-                rgb(48, 199, 255) 60%
-        );
-        -webkit-background-clip: text;
-        color: transparent;
+    /* Apply the script font to the first part of the title */
+    .cursive {
+        font-family: 'Permanent Marker', cursive;
     }
 
-    /* Apply the script font to the first part of the title */
-    .text-md {
-        font-family: 'Permanent Marker', cursive;
+    .visible-layer-button {
+        @apply text-zinc-100;
     }
 </style>
