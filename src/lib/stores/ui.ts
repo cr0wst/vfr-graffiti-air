@@ -13,8 +13,7 @@ function persist(key: string, value: any) {
 						boundaries: parsedValue.showLayers.boundaries,
 						controllers: parsedValue.showLayers.controllers,
 						pilots: parsedValue.showLayers.pilots
-					},
-					showAllPilots: parsedValue.showAllPilots
+					}
 				};
 			}
 

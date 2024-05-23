@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Map from '$lib/map/Map.svelte';
 	import { onMount } from 'svelte';
-	import { activePilot, controllers, pilots } from '$lib/stores';
+	import { activePilot, controllers, pilots, showAllPilots } from '$lib/stores';
 	import LayerToggle from '$lib/LayerToggle.svelte';
 	import PilotInfo from '$lib/PilotInfo.svelte';
 	import { writable } from 'svelte/store';
@@ -16,13 +16,18 @@
 			}
 
 		}, 30000);
+
+		showAllPilots.subscribe(() => {
+			loadData();
+		});
+
 		return () => clearInterval(interval);
 	});
 
 	async function loadData() {
 		try {
 			const [pilotResponse, controllerResponse] = await Promise.all([
-				fetch(`/api/pilots`),
+				fetch(`/api/pilots?showAllPilots=${$showAllPilots}`),
 				fetch('/api/controllers'),
 			]);
 
