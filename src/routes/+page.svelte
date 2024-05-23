@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Map from '$lib/map/Map.svelte';
 	import { onMount } from 'svelte';
-	import { activePilot, controllers, pilots, showAllPilots } from '$lib/stores';
+	import { activePilot, activePilotId, controllers, pilots, showAllPilots } from '$lib/stores';
 	import LayerToggle from '$lib/LayerToggle.svelte';
 	import PilotInfo from '$lib/PilotInfo.svelte';
 	import { writable } from 'svelte/store';
@@ -35,6 +35,12 @@
 				pilotResponse.json(),
 				controllerResponse.json()
 			]);
+
+			if ($activePilotId) {
+				fetch(`/api/pilots/${$activePilotId}`)
+					.then(res => res.json())
+					.then(data => activePilot.set(data));
+			}
 
 			pilots.set(pilotData);
 			controllers.set(controllerData);
